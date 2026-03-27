@@ -1,6 +1,6 @@
 const { app, Menu, BrowserWindow, ipcMain } = require("electron");
 
-// Minimal menu for macOS (required for app to work properly)
+// Menu for macOS (includes Edit roles so standard shortcuts work in inputs)
 const menuItems = process.platform === 'darwin' ? [
     {
         label: app.getName(),
@@ -9,6 +9,12 @@ const menuItems = process.platform === 'darwin' ? [
             { type: 'separator' },
             { role: 'quit' }
         ]
+    },
+    {
+        role: 'editMenu'
+    },
+    {
+        role: 'windowMenu'
     }
 ] : [];
 

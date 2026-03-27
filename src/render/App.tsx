@@ -12,6 +12,7 @@ import MqttLog from './components/MqttLog';
 import Settings from './components/Settings';
 import Firmware from './components/Firmware';
 import Devices from './components/Devices';
+import AIChat from './components/AIChat';
 import RouteIframe from './components/RouteIframe';
 
 // Import i18n
@@ -27,6 +28,7 @@ const modalTitleKeys: Record<string, string> = {
   '/messages': 'Messages',
   '/settings': 'Settings',
   '/firmware': 'Firmware',
+  '/ai-chat': 'AI Chat',
 };
 
 // Modal icons for each route
@@ -35,6 +37,7 @@ const modalIcons: Record<string, React.ComponentType<{ className?: string }>> = 
   '/messages': FiMessageSquare,
   '/settings': FiGlobe,
   '/firmware': FiDownload,
+  '/ai-chat': FiMessageSquare,
 };
 
 // Hardware dropdown component for Devices, Messages, and Firmware (responsive)
@@ -441,6 +444,19 @@ export default function App() {
                 {i18n.__('Firmware')}
               </NavLink>
 
+              <NavLink
+                to="/ai-chat"
+                className={({ isActive }) =>
+                  `flex items-center gap-1.5 px-3 py-1.5 mx-1 text-xs font-semibold uppercase rounded transition-all
+                  ${isActive
+                    ? 'bg-hardwario-primary text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`
+                }
+              >
+                <FiMessageSquare className="w-3.5 h-3.5" />
+                {i18n.__('AI Chat')}
+              </NavLink>
+
             </div>
 
             {/* Right side - Controls */}
@@ -623,6 +639,7 @@ export default function App() {
             <Route path="/settings" element={<ModalPage><Settings /></ModalPage>} />
             <Route path="/firmware" element={<ModalPage wide><Firmware /></ModalPage>} />
             <Route path="/firmware/:fw" element={<ModalPage wide><Firmware /></ModalPage>} />
+            <Route path="/ai-chat" element={<ModalPage><AIChat /></ModalPage>} />
           </Routes>
         </main>
 

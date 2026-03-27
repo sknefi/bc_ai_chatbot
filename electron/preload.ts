@@ -54,6 +54,45 @@ export interface FileDialogResult {
   canceled: boolean;
 }
 
+export interface AIChatMessageInput {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+export interface AIChatSendPayload {
+  requestId: string;
+  model: string;
+  messages: AIChatMessageInput[];
+}
+
+export interface AIChatModelOption {
+  id: string;
+  label: string;
+  free: boolean;
+}
+
+export interface AIChatConfig {
+  hasApiKey: boolean;
+  model: string;
+  defaultModel: string;
+  modelOptions: AIChatModelOption[];
+  encryptionAvailable: boolean;
+}
+
+export interface AIChatChunkPayload {
+  requestId: string;
+  delta: string;
+}
+
+export interface AIChatDonePayload {
+  requestId: string;
+}
+
+export interface AIChatErrorPayload {
+  requestId: string;
+  error: string;
+}
+
 // Helper to create unsubscribe function for event listeners
 function createListener<T>(channel: string, callback: (data: T) => void): () => void {
   const listener = (_event: IpcRendererEvent, data: T) => callback(data);
@@ -118,6 +157,18 @@ export interface ElectronAPI {
     zoomOut: () => void;
     reset: () => void;
     get: () => Promise<number>;
+  };
+  aiChat: {
+    getConfig: () => Promise<AIChatConfig>;
+    setApiKey: (apiKey: string) => Promise<{ encrypted: boolean }>;
+    clearApiKey: () => Promise<{ ok: boolean }>;
+    setModel: (model: string) => Promise<{ ok: boolean; model: string }>;
+    send: (payload: AIChatSendPayload) => void;
+    cancel: (requestId: string) => void;
+    onChunk: (callback: (payload: AIChatChunkPayload) => void) => () => void;
+    onDone: (callback: (payload: AIChatDonePayload) => void) => () => void;
+    onError: (callback: (payload: AIChatErrorPayload) => void) => () => void;
+    onCancelled: (callback: (payload: AIChatDonePayload) => void) => () => void;
   };
 }
 
@@ -211,6 +262,23 @@ const electronAPI: ElectronAPI = {
     zoomOut: () => ipcRenderer.send('zoom:out'),
     reset: () => ipcRenderer.send('zoom:reset'),
     get: () => ipcRenderer.invoke('zoom:get'),
+  },
+
+  aiChat: {
+    getConfig: () => ipcRenderer.invoke('ai-chat/get-config'),
+    setApiKey: (apiKey: string) => ipcRenderer.invoke('ai-chat/set-api-key', apiKey),
+    clearApiKey: () => ipcRenderer.invoke('ai-chat/clear-api-key'),
+    setModel: (model: string) => ipcRenderer.invoke('ai-chat/set-model', model),
+    send: (payload: AIChatSendPayload) => ipcRenderer.send('ai-chat/send', payload),
+    cancel: (requestId: string) => ipcRenderer.send('ai-chat/cancel', requestId),
+    onChunk: (callback: (payload: AIChatChunkPayload) => void) =>
+      createListener('ai-chat/chunk', callback),
+    onDone: (callback: (payload: AIChatDonePayload) => void) =>
+      createListener('ai-chat/done', callback),
+    onError: (callback: (payload: AIChatErrorPayload) => void) =>
+      createListener('ai-chat/error', callback),
+    onCancelled: (callback: (payload: AIChatDonePayload) => void) =>
+      createListener('ai-chat/cancelled', callback),
   },
 };
 
