@@ -93,6 +93,20 @@ export interface AIChatErrorPayload {
   error: string;
 }
 
+export interface DocsIngestStatus {
+  state: 'idle' | 'running' | 'success' | 'error';
+  message: string;
+  sourceId: string;
+  targetDir: string;
+  manifestPath: string;
+  treeSha: string;
+  totalFiles: number;
+  completedFiles: number;
+  startedAt: string | null;
+  finishedAt: string | null;
+  error: string;
+}
+
 // Helper to create unsubscribe function for event listeners
 function createListener<T>(channel: string, callback: (data: T) => void): () => void {
   const listener = (_event: IpcRendererEvent, data: T) => callback(data);
@@ -169,6 +183,11 @@ export interface ElectronAPI {
     onDone: (callback: (payload: AIChatDonePayload) => void) => () => void;
     onError: (callback: (payload: AIChatErrorPayload) => void) => () => void;
     onCancelled: (callback: (payload: AIChatDonePayload) => void) => () => void;
+  };
+  docsIngest: {
+    getStatus: () => Promise<DocsIngestStatus>;
+    downloadHardwareDocs: () => Promise<DocsIngestStatus>;
+    onStatus: (callback: (status: DocsIngestStatus) => void) => () => void;
   };
 }
 
@@ -279,6 +298,13 @@ const electronAPI: ElectronAPI = {
       createListener('ai-chat/error', callback),
     onCancelled: (callback: (payload: AIChatDonePayload) => void) =>
       createListener('ai-chat/cancelled', callback),
+  },
+
+  docsIngest: {
+    getStatus: () => ipcRenderer.invoke('docs-ingest/get-status'),
+    downloadHardwareDocs: () => ipcRenderer.invoke('docs-ingest/download-hardware-docs'),
+    onStatus: (callback: (status: DocsIngestStatus) => void) =>
+      createListener('docs-ingest/status', callback),
   },
 };
 

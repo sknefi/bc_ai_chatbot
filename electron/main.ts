@@ -22,6 +22,7 @@ const Firmware = require('../src/background/Firmware');
 const Gateway = require('../src/background/Gateway');
 const Home = require('../src/background/Home');
 const AIChat = require('../src/background/AIChat');
+const DocsIngest = require('../src/background/DocsIngest');
 const CustomMenu = require('../src/utils/Menu');
 
 // Enable context menu
@@ -123,6 +124,7 @@ if (!fs.existsSync(userDataPath)) {
 // Setup background workers
 Settings.setup();
 AIChat.setup();
+DocsIngest.setup();
 MqttBroker.setup();
 Gateway.setup();
 Firmware.setup();

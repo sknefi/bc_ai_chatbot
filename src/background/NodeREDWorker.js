@@ -172,8 +172,7 @@ function setup() {
 
         } else {
             status = "external";
-
-            reject();
+            resolve();
         }
     });
 }

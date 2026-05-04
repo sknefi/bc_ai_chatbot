@@ -1,5 +1,6 @@
 import { FormEvent, KeyboardEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { FiKey, FiSend, FiSquare, FiTrash2 } from 'react-icons/fi';
+import { FiDownload, FiKey, FiRefreshCw, FiSend, FiSquare, FiTrash2 } from 'react-icons/fi';
+import type { DocsIngestStatus } from '../../../electron/preload';
 
 interface ChatMessage {
   id: string;
@@ -272,6 +273,19 @@ export default function AIChat() {
   const [isSending, setIsSending] = useState(false);
   const [statusText, setStatusText] = useState<string>('');
   const [errorText, setErrorText] = useState<string>('');
+  const [docsStatus, setDocsStatus] = useState<DocsIngestStatus>({
+    state: 'idle',
+    message: 'No documentation downloaded yet.',
+    sourceId: 'hardwario-docs',
+    targetDir: '',
+    manifestPath: '',
+    treeSha: '',
+    totalFiles: 0,
+    completedFiles: 0,
+    startedAt: null,
+    finishedAt: null,
+    error: '',
+  });
 
   const currentRequestIdRef = useRef<string | null>(null);
   const currentAssistantIdRef = useRef<string | null>(null);
@@ -289,6 +303,15 @@ export default function AIChat() {
       .catch((error) => {
         const message = error instanceof Error ? error.message : 'Failed to load chat configuration.';
         setErrorText(message);
+      });
+
+    window.electronAPI.docsIngest
+      .getStatus()
+      .then((status) => {
+        setDocsStatus(status);
+      })
+      .catch((error) => {
+        console.error('Failed to load docs ingestion status.', error);
       });
   }, []);
 
@@ -360,6 +383,16 @@ export default function AIChat() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isSending]);
 
+  useEffect(() => {
+    const unsubDocsStatus = window.electronAPI.docsIngest.onStatus((status) => {
+      setDocsStatus(status);
+    });
+
+    return () => {
+      unsubDocsStatus();
+    };
+  }, []);
+
   const canSend = useMemo(() => {
     return hasApiKey && !isSending && prompt.trim().length > 0 && model.length > 0;
   }, [hasApiKey, isSending, prompt, model]);
@@ -404,6 +437,21 @@ export default function AIChat() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to save selected model.';
       setErrorText(message);
+    }
+  };
+
+  const handleDownloadDocs = async () => {
+    try {
+      const status = await window.electronAPI.docsIngest.downloadHardwareDocs();
+      setDocsStatus(status);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to start documentation download.';
+      setDocsStatus((prev) => ({
+        ...prev,
+        state: 'error',
+        message,
+        error: message,
+      }));
     }
   };
 
@@ -468,6 +516,10 @@ export default function AIChat() {
     }
   };
 
+  const docsProgressLabel = docsStatus.totalFiles > 0
+    ? `${docsStatus.completedFiles}/${docsStatus.totalFiles} files`
+    : 'No files downloaded yet';
+
   return (
     <div className="h-full flex flex-col bg-gray-50">
       <div className="p-4 border-b border-gray-200 bg-white space-y-3">
@@ -531,6 +583,62 @@ export default function AIChat() {
             </select>
             <p className="mt-1 text-xs text-gray-500">Use a free model for testing, then switch to GPT-4.1 Mini.</p>
           </div>
+        </div>
+
+        <div className="rounded border border-gray-200 bg-gray-50 p-3 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-medium text-gray-900">Documentation Ingestion</h3>
+              <p className="text-xs text-gray-500">
+                Temporary testing control for downloading `tower/hardware-modules/` from GitHub, excluding `images/`.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleDownloadDocs()}
+              disabled={docsStatus.state === 'running'}
+              className="h-10 px-4 bg-gray-900 text-white font-medium rounded hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {docsStatus.state === 'running' ? (
+                <>
+                  <FiRefreshCw className="w-4 h-4 animate-spin" />
+                  Downloading
+                </>
+              ) : (
+                <>
+                  <FiDownload className="w-4 h-4" />
+                  Download Docs
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 text-xs text-gray-600">
+            <div className="rounded border border-gray-200 bg-white px-3 py-2">
+              <div className="font-medium text-gray-800">Status</div>
+              <div>{docsStatus.message}</div>
+            </div>
+            <div className="rounded border border-gray-200 bg-white px-3 py-2">
+              <div className="font-medium text-gray-800">Progress</div>
+              <div>{docsProgressLabel}</div>
+            </div>
+            {docsStatus.targetDir ? (
+              <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                <div className="font-medium text-gray-800">Raw Docs Path</div>
+                <div className="font-mono break-all">{docsStatus.targetDir}</div>
+              </div>
+            ) : null}
+            {docsStatus.manifestPath ? (
+              <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                <div className="font-medium text-gray-800">Manifest Path</div>
+                <div className="font-mono break-all">{docsStatus.manifestPath}</div>
+              </div>
+            ) : null}
+          </div>
+
+          {docsStatus.error ? (
+            <p className="text-xs text-red-600">{docsStatus.error}</p>
+          ) : null}
         </div>
 
         {(statusText || errorText) && (
