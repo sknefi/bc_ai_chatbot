@@ -105,6 +105,7 @@ export interface DocsIngestStatus {
   startedAt: string | null;
   finishedAt: string | null;
   error: string;
+  hasLocalDocs: boolean;
 }
 
 // Helper to create unsubscribe function for event listeners

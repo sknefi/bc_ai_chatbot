@@ -275,7 +275,7 @@ export default function AIChat() {
   const [errorText, setErrorText] = useState<string>('');
   const [docsStatus, setDocsStatus] = useState<DocsIngestStatus>({
     state: 'idle',
-    message: 'No documentation downloaded yet.',
+    message: 'Documentation corpus not downloaded yet.',
     sourceId: 'hardwario-docs',
     targetDir: '',
     manifestPath: '',
@@ -285,11 +285,22 @@ export default function AIChat() {
     startedAt: null,
     finishedAt: null,
     error: '',
+    hasLocalDocs: false,
   });
 
   const currentRequestIdRef = useRef<string | null>(null);
   const currentAssistantIdRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Re-check local corpus state whenever the panel opens or the app regains focus.
+  const loadDocsStatus = async () => {
+    try {
+      const status = await window.electronAPI.docsIngest.getStatus();
+      setDocsStatus(status);
+    } catch (error) {
+      console.error('Failed to refresh docs ingestion status.', error);
+    }
+  };
 
   useEffect(() => {
     window.electronAPI.aiChat
@@ -305,14 +316,7 @@ export default function AIChat() {
         setErrorText(message);
       });
 
-    window.electronAPI.docsIngest
-      .getStatus()
-      .then((status) => {
-        setDocsStatus(status);
-      })
-      .catch((error) => {
-        console.error('Failed to load docs ingestion status.', error);
-      });
+    void loadDocsStatus();
   }, []);
 
   useEffect(() => {
@@ -388,8 +392,15 @@ export default function AIChat() {
       setDocsStatus(status);
     });
 
+    const handleWindowFocus = () => {
+      void loadDocsStatus();
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+
     return () => {
       unsubDocsStatus();
+      window.removeEventListener('focus', handleWindowFocus);
     };
   }, []);
 
@@ -519,6 +530,21 @@ export default function AIChat() {
   const docsProgressLabel = docsStatus.totalFiles > 0
     ? `${docsStatus.completedFiles}/${docsStatus.totalFiles} files`
     : 'No files downloaded yet';
+  const docsActionLabel = docsStatus.hasLocalDocs ? 'Refresh Docs' : 'Download Docs';
+  const docsStateBadgeClassName = docsStatus.state === 'running'
+    ? 'bg-amber-100 text-amber-800'
+    : docsStatus.hasLocalDocs
+      ? 'bg-green-100 text-green-800'
+      : docsStatus.state === 'error'
+        ? 'bg-red-100 text-red-800'
+        : 'bg-gray-200 text-gray-700';
+  const docsStateBadgeLabel = docsStatus.state === 'running'
+    ? 'Downloading'
+    : docsStatus.hasLocalDocs
+      ? 'Ready'
+      : docsStatus.state === 'error'
+        ? 'Unavailable'
+        : 'Missing';
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
@@ -588,9 +614,14 @@ export default function AIChat() {
         <div className="rounded border border-gray-200 bg-gray-50 p-3 space-y-2">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="text-sm font-medium text-gray-900">Documentation Ingestion</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-medium text-gray-900">Documentation Ingestion</h3>
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${docsStateBadgeClassName}`}>
+                  {docsStateBadgeLabel}
+                </span>
+              </div>
               <p className="text-xs text-gray-500">
-                Temporary testing control for downloading `tower/hardware-modules/` from GitHub, excluding `images/`.
+                Local-first testing control for `tower/hardware-modules/` from GitHub, excluding `images/`.
               </p>
             </div>
             <button
@@ -607,7 +638,7 @@ export default function AIChat() {
               ) : (
                 <>
                   <FiDownload className="w-4 h-4" />
-                  Download Docs
+                  {docsActionLabel}
                 </>
               )}
             </button>
@@ -622,6 +653,16 @@ export default function AIChat() {
               <div className="font-medium text-gray-800">Progress</div>
               <div>{docsProgressLabel}</div>
             </div>
+            <div className="rounded border border-gray-200 bg-white px-3 py-2">
+              <div className="font-medium text-gray-800">Local Availability</div>
+              <div>{docsStatus.hasLocalDocs ? 'Local corpus available on disk' : 'No local corpus yet'}</div>
+            </div>
+            {docsStatus.finishedAt ? (
+              <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                <div className="font-medium text-gray-800">Last Downloaded</div>
+                <div>{new Date(docsStatus.finishedAt).toLocaleString()}</div>
+              </div>
+            ) : null}
             {docsStatus.targetDir ? (
               <div className="rounded border border-gray-200 bg-white px-3 py-2">
                 <div className="font-medium text-gray-800">Raw Docs Path</div>
@@ -637,7 +678,11 @@ export default function AIChat() {
           </div>
 
           {docsStatus.error ? (
-            <p className="text-xs text-red-600">{docsStatus.error}</p>
+            <p className="text-xs text-red-600">
+              {docsStatus.hasLocalDocs
+                ? `Refresh failed, but the previous local corpus is still available: ${docsStatus.error}`
+                : docsStatus.error}
+            </p>
           ) : null}
         </div>
 

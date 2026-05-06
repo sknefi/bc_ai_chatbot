@@ -17,7 +17,7 @@ const RAW_BASE_URL = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAM
 
 let currentStatus = {
   state: "idle",
-  message: "No documentation downloaded yet.",
+  message: "Documentation corpus not downloaded yet.",
   sourceId: SOURCE_ID,
   targetDir: "",
   manifestPath: "",
@@ -27,6 +27,7 @@ let currentStatus = {
   startedAt: null,
   finishedAt: null,
   error: "",
+  hasLocalDocs: false,
 };
 
 let downloadPromise = null;
@@ -123,12 +124,89 @@ function loadManifestSummary() {
   }
 }
 
+function countFilesRecursively(dirPath) {
+  if (!fs.existsSync(dirPath)) {
+    return 0;
+  }
+
+  let total = 0;
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  for (const entry of entries) {
+    const entryPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      total += countFilesRecursively(entryPath);
+    } else if (entry.isFile()) {
+      total += 1;
+    }
+  }
+
+  return total;
+}
+
+function buildStoredCorpusStatus(manifest) {
+  const targetDir = getRawDocsPath();
+  const manifestPath = getManifestPath();
+  const storedFileCount = countFilesRecursively(targetDir);
+  const fileCount = Number(manifest?.fileCount || 0);
+
+  if (!manifest || storedFileCount <= 0 || fileCount <= 0) {
+    return null;
+  }
+
+  return {
+    state: "success",
+    message: `Local documentation corpus ready (${fileCount} files).`,
+    sourceId: SOURCE_ID,
+    targetDir,
+    manifestPath,
+    treeSha: manifest.treeSha || "",
+    totalFiles: fileCount,
+    completedFiles: fileCount,
+    startedAt: null,
+    finishedAt: manifest.downloadedAt || null,
+    error: "",
+    hasLocalDocs: true,
+  };
+}
+
+function resolveCurrentStatus() {
+  const manifest = loadManifestSummary();
+  const storedStatus = buildStoredCorpusStatus(manifest);
+
+  if (storedStatus) {
+    return {
+      ...storedStatus,
+      startedAt: currentStatus.startedAt,
+      error: currentStatus.state === "error" ? currentStatus.error : "",
+      message: currentStatus.state === "error" && currentStatus.error
+        ? "Local documentation corpus ready, but the last refresh attempt failed."
+        : storedStatus.message,
+    };
+  }
+
+  return {
+    ...currentStatus,
+    state: currentStatus.state === "error" ? "error" : "idle",
+    message: currentStatus.state === "error" && currentStatus.error
+      ? currentStatus.error
+      : "Documentation corpus not downloaded yet.",
+    targetDir: getRawDocsPath(),
+    manifestPath: getManifestPath(),
+    treeSha: "",
+    totalFiles: 0,
+    completedFiles: 0,
+    finishedAt: null,
+    hasLocalDocs: false,
+  };
+}
+
 async function downloadHardwareDocs() {
   const targetDir = getRawDocsPath();
   const sourceRoot = getSourceRootPath();
   const tempRoot = `${sourceRoot}.download`;
   const tempRawDir = path.join(tempRoot, "raw");
   const manifestPath = getManifestPath();
+  const existingStoredStatus = buildStoredCorpusStatus(loadManifestSummary());
 
   // Download into a temp directory first so a failed refresh never leaves a partial corpus
   fs.rmSync(tempRoot, { recursive: true, force: true });
@@ -146,6 +224,7 @@ async function downloadHardwareDocs() {
     startedAt: new Date().toISOString(),
     finishedAt: null,
     error: "",
+    hasLocalDocs: Boolean(existingStoredStatus),
   });
 
   const treePayload = await fetchJson(TREE_URL);
@@ -206,41 +285,25 @@ async function downloadHardwareDocs() {
 
   publishStatus({
     state: "success",
-    message: `Downloaded ${files.length} documentation files.`,
+    message: `Local documentation corpus ready (${files.length} files).`,
     targetDir,
     manifestPath,
     totalFiles: files.length,
     completedFiles: files.length,
     finishedAt: manifest.downloadedAt,
     error: "",
+    hasLocalDocs: true,
   });
 
   return currentStatus;
 }
 
 function getStatus() {
-  if (currentStatus.state === "success" || currentStatus.state === "running") {
+  if (currentStatus.state === "running") {
     return currentStatus;
   }
 
-  const manifest = loadManifestSummary();
-  if (!manifest) {
-    return currentStatus;
-  }
-
-  // Reconstruct a useful UI state from disk after app restart.
-  return {
-    ...currentStatus,
-    state: "success",
-    message: `Downloaded ${manifest.fileCount || 0} documentation files.`,
-    targetDir: getRawDocsPath(),
-    manifestPath: getManifestPath(),
-    treeSha: manifest.treeSha || "",
-    totalFiles: manifest.fileCount || 0,
-    completedFiles: manifest.fileCount || 0,
-    finishedAt: manifest.downloadedAt || null,
-    error: "",
-  };
+  return resolveCurrentStatus();
 }
 
 function setup() {
@@ -258,11 +321,15 @@ function setup() {
     downloadPromise = downloadHardwareDocs()
       .catch((error) => {
         const message = error instanceof Error ? error.message : "Unknown documentation download error.";
+        const storedStatus = buildStoredCorpusStatus(loadManifestSummary());
         publishStatus({
-          state: "error",
-          message,
+          state: storedStatus ? "success" : "error",
+          message: storedStatus
+            ? "Local documentation corpus ready, but the last refresh attempt failed."
+            : message,
           finishedAt: new Date().toISOString(),
           error: message,
+          hasLocalDocs: Boolean(storedStatus),
         });
         return currentStatus;
       })
