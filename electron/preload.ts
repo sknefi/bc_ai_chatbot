@@ -108,6 +108,25 @@ export interface DocsIngestStatus {
   hasLocalDocs: boolean;
 }
 
+export interface AIChatConversation {
+  id: string;
+  title: string;
+  model: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+  lastMessagePreview: string;
+}
+
+export interface AIChatStoredMessage {
+  id: string;
+  conversationId: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Helper to create unsubscribe function for event listeners
 function createListener<T>(channel: string, callback: (data: T) => void): () => void {
   const listener = (_event: IpcRendererEvent, data: T) => callback(data);
@@ -189,6 +208,20 @@ export interface ElectronAPI {
     getStatus: () => Promise<DocsIngestStatus>;
     downloadHardwareDocs: () => Promise<DocsIngestStatus>;
     onStatus: (callback: (status: DocsIngestStatus) => void) => () => void;
+  };
+  aiChatStore: {
+    listConversations: () => Promise<AIChatConversation[]>;
+    createConversation: (input?: { title?: string; model?: string }) => Promise<AIChatConversation>;
+    deleteConversation: (conversationId: string) => Promise<{ deleted: boolean }>;
+    renameConversation: (input: { conversationId: string; title: string }) => Promise<{ renamed: boolean; title: string; updatedAt: string }>;
+    clearConversation: (conversationId: string) => Promise<{ cleared: boolean }>;
+    getMessages: (conversationId: string) => Promise<AIChatStoredMessage[]>;
+    addMessage: (input: {
+      conversationId: string;
+      role: 'user' | 'assistant';
+      content: string;
+      model?: string;
+    }) => Promise<AIChatStoredMessage>;
   };
 }
 
@@ -306,6 +339,26 @@ const electronAPI: ElectronAPI = {
     downloadHardwareDocs: () => ipcRenderer.invoke('docs-ingest/download-hardware-docs'),
     onStatus: (callback: (status: DocsIngestStatus) => void) =>
       createListener('docs-ingest/status', callback),
+  },
+
+  aiChatStore: {
+    listConversations: () => ipcRenderer.invoke('ai-chat-store/list-conversations'),
+    createConversation: (input?: { title?: string; model?: string }) =>
+      ipcRenderer.invoke('ai-chat-store/create-conversation', input),
+    deleteConversation: (conversationId: string) =>
+      ipcRenderer.invoke('ai-chat-store/delete-conversation', conversationId),
+    renameConversation: (input: { conversationId: string; title: string }) =>
+      ipcRenderer.invoke('ai-chat-store/rename-conversation', input),
+    clearConversation: (conversationId: string) =>
+      ipcRenderer.invoke('ai-chat-store/clear-conversation', conversationId),
+    getMessages: (conversationId: string) =>
+      ipcRenderer.invoke('ai-chat-store/get-messages', conversationId),
+    addMessage: (input: {
+      conversationId: string;
+      role: 'user' | 'assistant';
+      content: string;
+      model?: string;
+    }) => ipcRenderer.invoke('ai-chat-store/add-message', input),
   },
 };
 
