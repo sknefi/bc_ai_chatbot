@@ -820,15 +820,19 @@ export default function AIChat() {
             messages.map((message) => (
               <div
                 key={message.id}
-                className={`max-w-[85%] px-4 py-3 rounded-lg shadow-sm break-words ${
-                  message.role === 'user'
-                    ? 'ml-auto bg-hardwario-primary text-white'
-                    : 'mr-auto bg-white border border-gray-200 text-gray-900'
-                }`}
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                {message.role === 'assistant'
-                  ? <MarkdownMessage content={message.content || (isSending ? '...' : '')} />
-                  : <div className="whitespace-pre-wrap">{message.content}</div>}
+                <div
+                  className={`max-w-[85%] px-4 py-3 rounded-lg shadow-sm break-words ${
+                    message.role === 'user'
+                      ? 'bg-hardwario-primary text-white'
+                      : 'bg-white border border-gray-200 text-gray-900'
+                  }`}
+                >
+                  {message.role === 'assistant'
+                    ? <MarkdownMessage content={message.content || (isSending ? '...' : '')} />
+                    : <div className="whitespace-pre-wrap">{message.content}</div>}
+                </div>
               </div>
             ))
           )}
