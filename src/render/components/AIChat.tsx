@@ -1,5 +1,7 @@
-import { FormEvent, KeyboardEvent, ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { FiDownload, FiKey, FiMessageSquare, FiPlus, FiRefreshCw, FiSend, FiSettings, FiSquare, FiTrash2, FiX } from 'react-icons/fi';
+import remarkGfm from 'remark-gfm';
 import type { AIChatConversation, AIChatStoredMessage, DocsIngestStatus } from '../../../electron/preload';
 
 interface ChatMessage {
@@ -21,246 +23,98 @@ function dropEmptyAssistant(messages: ChatMessage[], assistantId: string | null)
   return messages.filter((message) => !(message.id === assistantId && message.role === 'assistant' && message.content.trim().length === 0));
 }
 
-function renderInlineMarkdown(text: string, keyBase: string): ReactNode[] {
-  const nodes: ReactNode[] = [];
-  const regex = /(`[^`\n]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|\*[^*\n]+\*|_[^_\n]+_|~~[^~\n]+~~|\[[^\]]+\]\((https?:\/\/[^\s)]+)\))/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  let tokenIndex = 0;
+function MarkdownMessage({ content }: { content: string }) {
+  return (
+    <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-inherit prose-strong:text-inherit prose-code:text-gray-900 prose-pre:hidden prose-a:text-hardwario-primary prose-a:no-underline hover:prose-a:underline">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          a: ({ href, children, ...props }) => (
+            <a
+              {...props}
+              href={href}
+              onClick={(event) => {
+                event.preventDefault();
+                if (href) {
+                  void window.electronAPI.shell.openExternal(href);
+                }
+              }}
+            >
+              {children}
+            </a>
+          ),
+          blockquote: ({ children, ...props }) => (
+            <blockquote {...props} className="border-l-2 border-gray-300 pl-3 text-gray-700 italic">
+              {children}
+            </blockquote>
+          ),
+          code: ({ className, children, ...props }) => {
+            const languageMatch = /language-([\w-]+)/.exec(className || '');
+            const code = String(children).replace(/\n$/, '');
 
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      nodes.push(text.slice(lastIndex, match.index));
-    }
+            if (!languageMatch) {
+              return (
+                <code
+                  {...props}
+                  className="px-1 py-0.5 bg-gray-200 text-gray-900 rounded text-[0.9em] font-mono"
+                >
+                  {children}
+                </code>
+              );
+            }
 
-    const token = match[0];
-    const key = `${keyBase}-${tokenIndex++}`;
-
-    if (token.startsWith('`') && token.endsWith('`')) {
-      nodes.push(
-        <code key={key} className="px-1 py-0.5 bg-gray-200 text-gray-900 rounded text-[0.9em] font-mono">
-          {token.slice(1, -1)}
-        </code>
-      );
-    } else if ((token.startsWith('**') && token.endsWith('**')) || (token.startsWith('__') && token.endsWith('__'))) {
-      nodes.push(<strong key={key}>{token.slice(2, -2)}</strong>);
-    } else if ((token.startsWith('*') && token.endsWith('*')) || (token.startsWith('_') && token.endsWith('_'))) {
-      nodes.push(<em key={key}>{token.slice(1, -1)}</em>);
-    } else if (token.startsWith('~~') && token.endsWith('~~')) {
-      nodes.push(<del key={key}>{token.slice(2, -2)}</del>);
-    } else if (token.startsWith('[')) {
-      const linkMatch = token.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/);
-      if (linkMatch) {
-        const [, label, href] = linkMatch;
-        nodes.push(
-          <a
-            key={key}
-            href={href}
-            className="text-hardwario-primary hover:underline"
-            onClick={(event) => {
-              event.preventDefault();
-              void window.electronAPI.shell.openExternal(href);
-            }}
-          >
-            {label}
-          </a>
-        );
-      } else {
-        nodes.push(token);
-      }
-    } else {
-      nodes.push(token);
-    }
-
-    lastIndex = regex.lastIndex;
-  }
-
-  if (lastIndex < text.length) {
-    nodes.push(text.slice(lastIndex));
-  }
-
-  return nodes;
-}
-
-function renderParagraph(text: string, keyBase: string) {
-  const lines = text.split('\n');
-  return lines.map((line, index) => (
-    <span key={`${keyBase}-line-${index}`}>
-      {renderInlineMarkdown(line, `${keyBase}-inline-${index}`)}
-      {index < lines.length - 1 ? <br /> : null}
-    </span>
-  ));
-}
-
-function isUnorderedListLine(line: string): boolean {
-  return /^\s*[-*+]\s+/.test(line);
-}
-
-function isOrderedListLine(line: string): boolean {
-  return /^\s*\d+\.\s+/.test(line);
-}
-
-function isHeadingLine(line: string): boolean {
-  return /^\s*#{1,6}\s+/.test(line);
-}
-
-function isQuoteLine(line: string): boolean {
-  return /^\s*>\s?/.test(line);
-}
-
-function renderTextBlocks(text: string, keyBase: string): ReactNode[] {
-  const blocks: ReactNode[] = [];
-  const lines = text.split('\n');
-  let index = 0;
-  let blockIndex = 0;
-
-  const isSpecialLine = (line: string) =>
-    isHeadingLine(line) || isQuoteLine(line) || isUnorderedListLine(line) || isOrderedListLine(line);
-
-  while (index < lines.length) {
-    const line = lines[index];
-    if (!line || line.trim().length === 0) {
-      index += 1;
-      continue;
-    }
-
-    if (isHeadingLine(line)) {
-      const match = line.match(/^\s*(#{1,6})\s+(.*)$/);
-      const level = Math.min(6, match ? match[1].length : 1);
-      const content = match ? match[2] : line;
-      const title = renderInlineMarkdown(content, `${keyBase}-h-${blockIndex}`);
-      const className = level <= 2 ? 'font-semibold text-base' : 'font-semibold text-sm';
-      const Tag = `h${level}` as keyof JSX.IntrinsicElements;
-      blocks.push(
-        <Tag key={`${keyBase}-heading-${blockIndex++}`} className={className}>
-          {title}
-        </Tag>
-      );
-      index += 1;
-      continue;
-    }
-
-    if (isQuoteLine(line)) {
-      const quoteLines: string[] = [];
-      while (index < lines.length && isQuoteLine(lines[index])) {
-        quoteLines.push(lines[index].replace(/^\s*>\s?/, ''));
-        index += 1;
-      }
-
-      blocks.push(
-        <blockquote
-          key={`${keyBase}-quote-${blockIndex++}`}
-          className="border-l-2 border-gray-300 pl-3 text-gray-700"
-        >
-          {renderParagraph(quoteLines.join('\n'), `${keyBase}-quote-content-${blockIndex}`)}
-        </blockquote>
-      );
-      continue;
-    }
-
-    if (isUnorderedListLine(line)) {
-      const items: string[] = [];
-      while (index < lines.length && isUnorderedListLine(lines[index])) {
-        items.push(lines[index].replace(/^\s*[-*+]\s+/, ''));
-        index += 1;
-      }
-
-      blocks.push(
-        <ul key={`${keyBase}-ul-${blockIndex++}`} className="list-disc pl-5 space-y-1">
-          {items.map((item, itemIndex) => (
-            <li key={`${keyBase}-ul-item-${itemIndex}`}>
-              {renderInlineMarkdown(item, `${keyBase}-ul-inline-${itemIndex}`)}
-            </li>
-          ))}
-        </ul>
-      );
-      continue;
-    }
-
-    if (isOrderedListLine(line)) {
-      const items: string[] = [];
-      while (index < lines.length && isOrderedListLine(lines[index])) {
-        items.push(lines[index].replace(/^\s*\d+\.\s+/, ''));
-        index += 1;
-      }
-
-      blocks.push(
-        <ol key={`${keyBase}-ol-${blockIndex++}`} className="list-decimal pl-5 space-y-1">
-          {items.map((item, itemIndex) => (
-            <li key={`${keyBase}-ol-item-${itemIndex}`}>
-              {renderInlineMarkdown(item, `${keyBase}-ol-inline-${itemIndex}`)}
-            </li>
-          ))}
-        </ol>
-      );
-      continue;
-    }
-
-    const paragraphLines: string[] = [];
-    while (index < lines.length) {
-      const candidate = lines[index];
-      if (!candidate || candidate.trim().length === 0 || isSpecialLine(candidate)) {
-        break;
-      }
-      paragraphLines.push(candidate);
-      index += 1;
-    }
-
-    blocks.push(
-      <p key={`${keyBase}-p-${blockIndex++}`} className="leading-relaxed">
-        {renderParagraph(paragraphLines.join('\n'), `${keyBase}-p-content-${blockIndex}`)}
-      </p>
-    );
-  }
-
-  return blocks;
-}
-
-function renderMarkdown(content: string, keyBase: string): ReactNode {
-  const nodes: ReactNode[] = [];
-  const codeRegex = /```([a-zA-Z0-9_-]+)?\n?([\s\S]*?)```/g;
-  let cursor = 0;
-  let sectionIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = codeRegex.exec(content)) !== null) {
-    const before = content.slice(cursor, match.index);
-    if (before.trim().length > 0) {
-      nodes.push(
-        <div key={`${keyBase}-text-${sectionIndex++}`} className="space-y-2">
-          {renderTextBlocks(before, `${keyBase}-text-block-${sectionIndex}`)}
-        </div>
-      );
-    }
-
-    const language = match[1]?.trim();
-    const code = (match[2] || '').replace(/\n$/, '');
-    nodes.push(
-      <div key={`${keyBase}-code-wrap-${sectionIndex++}`} className="rounded-md overflow-hidden border border-gray-300">
-        <div className="px-3 py-1 text-xs bg-gray-800 text-gray-300">{language || 'code'}</div>
-        <pre className="m-0 p-3 bg-gray-900 text-gray-100 overflow-x-auto text-xs">
-          <code>{code}</code>
-        </pre>
-      </div>
-    );
-
-    cursor = codeRegex.lastIndex;
-  }
-
-  const tail = content.slice(cursor);
-  if (tail.trim().length > 0) {
-    nodes.push(
-      <div key={`${keyBase}-tail-${sectionIndex++}`} className="space-y-2">
-        {renderTextBlocks(tail, `${keyBase}-tail-block-${sectionIndex}`)}
-      </div>
-    );
-  }
-
-  if (nodes.length === 0) {
-    return <span>{content}</span>;
-  }
-
-  return <div className="space-y-3">{nodes}</div>;
+            return (
+              <div className="rounded-md overflow-hidden border border-gray-300 my-3">
+                <div className="px-3 py-1 text-xs bg-gray-800 text-gray-300">{languageMatch[1]}</div>
+                <pre className="m-0 p-3 bg-gray-900 text-gray-100 overflow-x-auto text-xs">
+                  <code>{code}</code>
+                </pre>
+              </div>
+            );
+          },
+          table: ({ children, ...props }) => (
+            <div className="my-3 overflow-x-auto">
+              <table {...props} className="min-w-full border-collapse border border-gray-300 text-sm">
+                {children}
+              </table>
+            </div>
+          ),
+          thead: ({ children, ...props }) => (
+            <thead {...props} className="bg-gray-100">
+              {children}
+            </thead>
+          ),
+          th: ({ children, ...props }) => (
+            <th {...props} className="border border-gray-300 px-3 py-2 text-left font-semibold text-gray-900">
+              {children}
+            </th>
+          ),
+          td: ({ children, ...props }) => (
+            <td {...props} className="border border-gray-300 px-3 py-2 align-top text-gray-900">
+              {children}
+            </td>
+          ),
+          ul: ({ children, ...props }) => (
+            <ul {...props} className="list-disc pl-5 space-y-1">
+              {children}
+            </ul>
+          ),
+          ol: ({ children, ...props }) => (
+            <ol {...props} className="list-decimal pl-5 space-y-1">
+              {children}
+            </ol>
+          ),
+          p: ({ children, ...props }) => (
+            <p {...props} className="leading-relaxed">
+              {children}
+            </p>
+          ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
 }
 
 function formatConversationDate(value: string): string {
@@ -973,7 +827,7 @@ export default function AIChat() {
                 }`}
               >
                 {message.role === 'assistant'
-                  ? renderMarkdown(message.content || (isSending ? '...' : ''), message.id)
+                  ? <MarkdownMessage content={message.content || (isSending ? '...' : '')} />
                   : <div className="whitespace-pre-wrap">{message.content}</div>}
               </div>
             ))
