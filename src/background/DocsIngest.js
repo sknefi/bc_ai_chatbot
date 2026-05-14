@@ -44,6 +44,10 @@ function getSourceRootPath() {
   return sourceRoot;
 }
 
+function getChunksRootPath() {
+  return path.join(getRagBasePath(), "chunks", SOURCE_ID);
+}
+
 function getRawDocsPath() {
   return path.join(getSourceRootPath(), "raw");
 }
@@ -282,10 +286,12 @@ async function downloadHardwareDocs() {
   // Replace the previous corpus only after the new download is fully complete.
   fs.rmSync(sourceRoot, { recursive: true, force: true });
   fs.renameSync(tempRoot, sourceRoot);
+  // Any previously built chunks are now stale because they were derived from older docs.
+  fs.rmSync(getChunksRootPath(), { recursive: true, force: true });
 
   publishStatus({
     state: "success",
-    message: `Local documentation corpus ready (${files.length} files).`,
+    message: `Local documentation corpus ready (${files.length} files). Existing chunks were cleared and need to be rebuilt.`,
     targetDir,
     manifestPath,
     totalFiles: files.length,

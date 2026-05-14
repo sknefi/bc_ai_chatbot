@@ -1062,11 +1062,58 @@ export default function AIChat() {
                     )}
                   </button>
                 </div>
+                {(docsStatus.startedAt || docsStatus.finishedAt) ? (
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+                    {docsStatus.startedAt ? (
+                      <span>Started: {formatConversationDate(docsStatus.startedAt)}</span>
+                    ) : null}
+                    {docsStatus.finishedAt ? (
+                      <span>Finished: {formatConversationDate(docsStatus.finishedAt)}</span>
+                    ) : null}
+                  </div>
+                ) : null}
 
-                <div className="flex items-center justify-between gap-3 rounded border border-gray-200 bg-white px-3 py-3">
+                <div className="grid grid-cols-1 gap-2 text-xs text-gray-600">
+                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                    <div className="font-medium text-gray-800">Status</div>
+                    <div>{docsStatus.message}</div>
+                  </div>
+                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                    <div className="font-medium text-gray-800">Progress</div>
+                    <div>{docsProgressLabel}</div>
+                  </div>
+                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                    <div className="font-medium text-gray-800">Local Availability</div>
+                    <div>{docsStatus.hasLocalDocs ? 'Local corpus available on disk' : 'No local corpus yet'}</div>
+                  </div>
+                  {docsStatus.targetDir ? (
+                    <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                      <div className="font-medium text-gray-800">Raw Docs Path</div>
+                      <div className="font-mono break-all">{docsStatus.targetDir}</div>
+                    </div>
+                  ) : null}
+                  {docsStatus.manifestPath ? (
+                    <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                      <div className="font-medium text-gray-800">Manifest Path</div>
+                      <div className="font-mono break-all">{docsStatus.manifestPath}</div>
+                    </div>
+                  ) : null}
+                </div>
+
+                {docsStatus.error ? (
+                  <p className="text-xs text-red-600">
+                    {docsStatus.hasLocalDocs
+                      ? `Refresh failed, but the previous local corpus is still available: ${docsStatus.error}`
+                      : docsStatus.error}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="rounded border border-gray-200 bg-gray-50 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-medium text-gray-900">Chunk Generation</h4>
+                      <h3 className="text-sm font-medium text-gray-900">Chunk Generation</h3>
                       <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${docsChunkingStateBadgeClassName}`}>
                         {docsChunkingStateBadgeLabel}
                       </span>
@@ -1094,56 +1141,30 @@ export default function AIChat() {
                     )}
                   </button>
                 </div>
+                {(docsChunkingStatus.startedAt || docsChunkingStatus.finishedAt) ? (
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+                    {docsChunkingStatus.startedAt ? (
+                      <span>Started: {formatConversationDate(docsChunkingStatus.startedAt)}</span>
+                    ) : null}
+                    {docsChunkingStatus.finishedAt ? (
+                      <span>Finished: {formatConversationDate(docsChunkingStatus.finishedAt)}</span>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 <div className="grid grid-cols-1 gap-2 text-xs text-gray-600">
                   <div className="rounded border border-gray-200 bg-white px-3 py-2">
                     <div className="font-medium text-gray-800">Status</div>
-                    <div>{docsStatus.message}</div>
-                  </div>
-                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                    <div className="font-medium text-gray-800">Progress</div>
-                    <div>{docsProgressLabel}</div>
-                  </div>
-                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                    <div className="font-medium text-gray-800">Local Availability</div>
-                    <div>{docsStatus.hasLocalDocs ? 'Local corpus available on disk' : 'No local corpus yet'}</div>
-                  </div>
-                  {docsStatus.finishedAt ? (
-                    <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                      <div className="font-medium text-gray-800">Last Downloaded</div>
-                      <div>{formatConversationDate(docsStatus.finishedAt)}</div>
-                    </div>
-                  ) : null}
-                  {docsStatus.targetDir ? (
-                    <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                      <div className="font-medium text-gray-800">Raw Docs Path</div>
-                      <div className="font-mono break-all">{docsStatus.targetDir}</div>
-                    </div>
-                  ) : null}
-                  {docsStatus.manifestPath ? (
-                    <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                      <div className="font-medium text-gray-800">Manifest Path</div>
-                      <div className="font-mono break-all">{docsStatus.manifestPath}</div>
-                    </div>
-                  ) : null}
-                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                    <div className="font-medium text-gray-800">Chunk Status</div>
                     <div>{docsChunkingStatus.message}</div>
                   </div>
                   <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                    <div className="font-medium text-gray-800">Chunk Progress</div>
+                    <div className="font-medium text-gray-800">Progress</div>
                     <div>{docsChunkingProgressLabel}</div>
                   </div>
                   <div className="rounded border border-gray-200 bg-white px-3 py-2">
                     <div className="font-medium text-gray-800">Chunk Count</div>
                     <div>{docsChunkingStatus.chunkCount}</div>
                   </div>
-                  {docsChunkingStatus.finishedAt ? (
-                    <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                      <div className="font-medium text-gray-800">Last Chunk Build</div>
-                      <div>{formatConversationDate(docsChunkingStatus.finishedAt)}</div>
-                    </div>
-                  ) : null}
                   {docsChunkingStatus.outputPath ? (
                     <div className="rounded border border-gray-200 bg-white px-3 py-2">
                       <div className="font-medium text-gray-800">Chunks Output Path</div>
@@ -1158,13 +1179,6 @@ export default function AIChat() {
                   ) : null}
                 </div>
 
-                {docsStatus.error ? (
-                  <p className="text-xs text-red-600">
-                    {docsStatus.hasLocalDocs
-                      ? `Refresh failed, but the previous local corpus is still available: ${docsStatus.error}`
-                      : docsStatus.error}
-                  </p>
-                ) : null}
                 {docsChunkingStatus.error ? (
                   <p className="text-xs text-red-600">
                     {docsChunkingStatus.hasChunks
