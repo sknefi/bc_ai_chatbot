@@ -376,6 +376,9 @@ export default function AIChat() {
   useEffect(() => {
     const unsubDocsStatus = window.electronAPI.docsIngest.onStatus((status) => {
       setDocsStatus(status);
+      if (status.state !== 'running') {
+        void loadDocsChunkingStatus();
+      }
     });
     const unsubDocsChunkingStatus = window.electronAPI.docsChunking.onStatus((status) => {
       setDocsChunkingStatus(status);
@@ -446,7 +449,6 @@ export default function AIChat() {
     try {
       const status = await window.electronAPI.docsIngest.downloadHardwareDocs();
       setDocsStatus(status);
-      void loadDocsChunkingStatus();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start documentation download.';
       setDocsStatus((prev) => ({

@@ -152,9 +152,26 @@ function resolveCurrentStatus() {
     completedFiles: 0,
     chunkCount: 0,
     treeSha: "",
+    startedAt: null,
     finishedAt: null,
+    error: currentStatus.state === "error" ? currentStatus.error : "",
     hasChunks: false,
   };
+}
+
+function hasStoredChunks() {
+  return Boolean(
+    buildStoredChunksStatus(
+      loadJsonFile(getSourceManifestPath()),
+      loadJsonFile(getChunksManifestPath())
+    )
+  );
+}
+
+function clearChunks() {
+  fs.rmSync(getChunksRootPath(), { recursive: true, force: true });
+  currentStatus = resolveCurrentStatus();
+  notifyAll(STATUS_TOPIC, currentStatus);
 }
 
 function normalizeWhitespace(text) {
@@ -579,4 +596,10 @@ function setup() {
   });
 }
 
-module.exports = { setup };
+module.exports = {
+  setup,
+  buildChunks,
+  hasStoredChunks,
+  clearChunks,
+  getStatus,
+};

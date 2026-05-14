@@ -4,6 +4,7 @@ const { app, ipcMain } = require("electron");
 const fs = require("fs");
 const path = require("path");
 const notifyAll = require("../utils/notifyAll");
+const DocsChunking = require("./DocsChunking");
 
 const STATUS_TOPIC = "docs-ingest/status";
 const REPO_OWNER = "hardwario";
@@ -42,10 +43,6 @@ function getSourceRootPath() {
   const sourceRoot = path.join(getRagBasePath(), "sources", "github", SOURCE_ID);
   fs.mkdirSync(sourceRoot, { recursive: true });
   return sourceRoot;
-}
-
-function getChunksRootPath() {
-  return path.join(getRagBasePath(), "chunks", SOURCE_ID);
 }
 
 function getRawDocsPath() {
@@ -211,6 +208,7 @@ async function downloadHardwareDocs() {
   const tempRawDir = path.join(tempRoot, "raw");
   const manifestPath = getManifestPath();
   const existingStoredStatus = buildStoredCorpusStatus(loadManifestSummary());
+  const hadChunksBeforeRefresh = DocsChunking.hasStoredChunks();
 
   // Download into a temp directory first so a failed refresh never leaves a partial corpus
   fs.rmSync(tempRoot, { recursive: true, force: true });
@@ -286,12 +284,34 @@ async function downloadHardwareDocs() {
   // Replace the previous corpus only after the new download is fully complete.
   fs.rmSync(sourceRoot, { recursive: true, force: true });
   fs.renameSync(tempRoot, sourceRoot);
-  // Any previously built chunks are now stale because they were derived from older docs.
-  fs.rmSync(getChunksRootPath(), { recursive: true, force: true });
+
+  if (hadChunksBeforeRefresh) {
+    publishStatus({
+      message: "Documentation refreshed. Rebuilding chunks...",
+      completedFiles: files.length,
+    });
+
+    DocsChunking.clearChunks();
+    await DocsChunking.buildChunks();
+
+    publishStatus({
+      state: "success",
+      message: `Local documentation corpus ready (${files.length} files). Chunks were rebuilt successfully.`,
+      targetDir,
+      manifestPath,
+      totalFiles: files.length,
+      completedFiles: files.length,
+      finishedAt: new Date().toISOString(),
+      error: "",
+      hasLocalDocs: true,
+    });
+
+    return currentStatus;
+  }
 
   publishStatus({
     state: "success",
-    message: `Local documentation corpus ready (${files.length} files). Existing chunks were cleared and need to be rebuilt.`,
+    message: `Local documentation corpus ready (${files.length} files).`,
     targetDir,
     manifestPath,
     totalFiles: files.length,
