@@ -2,7 +2,7 @@ import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from '
 import ReactMarkdown from 'react-markdown';
 import { FiDownload, FiKey, FiMessageSquare, FiPlus, FiRefreshCw, FiSend, FiSettings, FiSquare, FiTrash2, FiX } from 'react-icons/fi';
 import remarkGfm from 'remark-gfm';
-import type { AIChatConversation, AIChatStoredMessage, DocsIngestStatus } from '../../../electron/preload';
+import type { AIChatConversation, AIChatStoredMessage, DocsChunkingStatus, DocsIngestStatus } from '../../../electron/preload';
 
 interface ChatMessage {
   id: string;
@@ -157,6 +157,21 @@ export default function AIChat() {
     error: '',
     hasLocalDocs: false,
   });
+  const [docsChunkingStatus, setDocsChunkingStatus] = useState<DocsChunkingStatus>({
+    state: 'idle',
+    message: 'Chunks not built yet.',
+    sourceId: 'hardwario-docs',
+    outputPath: '',
+    manifestPath: '',
+    totalFiles: 0,
+    completedFiles: 0,
+    chunkCount: 0,
+    treeSha: '',
+    startedAt: null,
+    finishedAt: null,
+    error: '',
+    hasChunks: false,
+  });
 
   const currentRequestIdRef = useRef<string | null>(null);
   const currentAssistantIdRef = useRef<string | null>(null);
@@ -179,6 +194,15 @@ export default function AIChat() {
       setDocsStatus(status);
     } catch (error) {
       console.error('Failed to refresh docs ingestion status.', error);
+    }
+  };
+
+  const loadDocsChunkingStatus = async () => {
+    try {
+      const status = await window.electronAPI.docsChunking.getStatus();
+      setDocsChunkingStatus(status);
+    } catch (error) {
+      console.error('Failed to refresh docs chunking status.', error);
     }
   };
 
@@ -259,6 +283,7 @@ export default function AIChat() {
       });
 
     void loadDocsStatus();
+    void loadDocsChunkingStatus();
     void refreshConversations().finally(() => {
       setIsLoadingConversations(false);
     });
@@ -352,15 +377,20 @@ export default function AIChat() {
     const unsubDocsStatus = window.electronAPI.docsIngest.onStatus((status) => {
       setDocsStatus(status);
     });
+    const unsubDocsChunkingStatus = window.electronAPI.docsChunking.onStatus((status) => {
+      setDocsChunkingStatus(status);
+    });
 
     const handleWindowFocus = () => {
       void loadDocsStatus();
+      void loadDocsChunkingStatus();
     };
 
     window.addEventListener('focus', handleWindowFocus);
 
     return () => {
       unsubDocsStatus();
+      unsubDocsChunkingStatus();
       window.removeEventListener('focus', handleWindowFocus);
     };
   }, []);
@@ -416,9 +446,25 @@ export default function AIChat() {
     try {
       const status = await window.electronAPI.docsIngest.downloadHardwareDocs();
       setDocsStatus(status);
+      void loadDocsChunkingStatus();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start documentation download.';
       setDocsStatus((prev) => ({
+        ...prev,
+        state: 'error',
+        message,
+        error: message,
+      }));
+    }
+  };
+
+  const handleBuildChunks = async () => {
+    try {
+      const status = await window.electronAPI.docsChunking.buildChunks();
+      setDocsChunkingStatus(status);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to start chunk build.';
+      setDocsChunkingStatus((prev) => ({
         ...prev,
         state: 'error',
         message,
@@ -649,6 +695,24 @@ export default function AIChat() {
     : docsStatus.hasLocalDocs
       ? 'Ready'
       : docsStatus.state === 'error'
+        ? 'Unavailable'
+        : 'Missing';
+  const docsChunkingProgressLabel = docsChunkingStatus.totalFiles > 0
+    ? `${docsChunkingStatus.completedFiles}/${docsChunkingStatus.totalFiles} files`
+    : 'No chunks built yet';
+  const docsChunkingActionLabel = docsChunkingStatus.hasChunks ? 'Rebuild Chunks' : 'Build Chunks';
+  const docsChunkingStateBadgeClassName = docsChunkingStatus.state === 'running'
+    ? 'bg-amber-100 text-amber-800'
+    : docsChunkingStatus.hasChunks
+      ? 'bg-green-100 text-green-800'
+      : docsChunkingStatus.state === 'error'
+        ? 'bg-red-100 text-red-800'
+        : 'bg-gray-200 text-gray-700';
+  const docsChunkingStateBadgeLabel = docsChunkingStatus.state === 'running'
+    ? 'Building'
+    : docsChunkingStatus.hasChunks
+      ? 'Ready'
+      : docsChunkingStatus.state === 'error'
         ? 'Unavailable'
         : 'Missing';
   const activeConversation = conversations.find((conversation) => conversation.id === activeConversationId) || null;
@@ -999,6 +1063,38 @@ export default function AIChat() {
                   </button>
                 </div>
 
+                <div className="flex items-center justify-between gap-3 rounded border border-gray-200 bg-white px-3 py-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-medium text-gray-900">Chunk Generation</h4>
+                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${docsChunkingStateBadgeClassName}`}>
+                        {docsChunkingStateBadgeLabel}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Build persisted chunk records directly from the downloaded raw markdown.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleBuildChunks()}
+                    disabled={docsChunkingStatus.state === 'running' || !docsStatus.hasLocalDocs}
+                    className="min-w-[180px] h-10 px-4 bg-gray-900 text-white font-medium rounded hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {docsChunkingStatus.state === 'running' ? (
+                      <>
+                        <FiRefreshCw className="w-4 h-4 animate-spin" />
+                        Building
+                      </>
+                    ) : (
+                      <>
+                        <FiRefreshCw className="w-4 h-4" />
+                        {docsChunkingActionLabel}
+                      </>
+                    )}
+                  </button>
+                </div>
+
                 <div className="grid grid-cols-1 gap-2 text-xs text-gray-600">
                   <div className="rounded border border-gray-200 bg-white px-3 py-2">
                     <div className="font-medium text-gray-800">Status</div>
@@ -1030,6 +1126,36 @@ export default function AIChat() {
                       <div className="font-mono break-all">{docsStatus.manifestPath}</div>
                     </div>
                   ) : null}
+                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                    <div className="font-medium text-gray-800">Chunk Status</div>
+                    <div>{docsChunkingStatus.message}</div>
+                  </div>
+                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                    <div className="font-medium text-gray-800">Chunk Progress</div>
+                    <div>{docsChunkingProgressLabel}</div>
+                  </div>
+                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                    <div className="font-medium text-gray-800">Chunk Count</div>
+                    <div>{docsChunkingStatus.chunkCount}</div>
+                  </div>
+                  {docsChunkingStatus.finishedAt ? (
+                    <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                      <div className="font-medium text-gray-800">Last Chunk Build</div>
+                      <div>{formatConversationDate(docsChunkingStatus.finishedAt)}</div>
+                    </div>
+                  ) : null}
+                  {docsChunkingStatus.outputPath ? (
+                    <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                      <div className="font-medium text-gray-800">Chunks Output Path</div>
+                      <div className="font-mono break-all">{docsChunkingStatus.outputPath}</div>
+                    </div>
+                  ) : null}
+                  {docsChunkingStatus.manifestPath ? (
+                    <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                      <div className="font-medium text-gray-800">Chunks Manifest Path</div>
+                      <div className="font-mono break-all">{docsChunkingStatus.manifestPath}</div>
+                    </div>
+                  ) : null}
                 </div>
 
                 {docsStatus.error ? (
@@ -1037,6 +1163,13 @@ export default function AIChat() {
                     {docsStatus.hasLocalDocs
                       ? `Refresh failed, but the previous local corpus is still available: ${docsStatus.error}`
                       : docsStatus.error}
+                  </p>
+                ) : null}
+                {docsChunkingStatus.error ? (
+                  <p className="text-xs text-red-600">
+                    {docsChunkingStatus.hasChunks
+                      ? `Chunk rebuild failed, but the previous chunk set is still available: ${docsChunkingStatus.error}`
+                      : docsChunkingStatus.error}
                   </p>
                 ) : null}
               </div>

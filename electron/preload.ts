@@ -108,6 +108,22 @@ export interface DocsIngestStatus {
   hasLocalDocs: boolean;
 }
 
+export interface DocsChunkingStatus {
+  state: 'idle' | 'running' | 'success' | 'error';
+  message: string;
+  sourceId: string;
+  outputPath: string;
+  manifestPath: string;
+  totalFiles: number;
+  completedFiles: number;
+  chunkCount: number;
+  treeSha: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  error: string;
+  hasChunks: boolean;
+}
+
 export interface AIChatConversation {
   id: string;
   title: string;
@@ -208,6 +224,11 @@ export interface ElectronAPI {
     getStatus: () => Promise<DocsIngestStatus>;
     downloadHardwareDocs: () => Promise<DocsIngestStatus>;
     onStatus: (callback: (status: DocsIngestStatus) => void) => () => void;
+  };
+  docsChunking: {
+    getStatus: () => Promise<DocsChunkingStatus>;
+    buildChunks: () => Promise<DocsChunkingStatus>;
+    onStatus: (callback: (status: DocsChunkingStatus) => void) => () => void;
   };
   aiChatStore: {
     listConversations: () => Promise<AIChatConversation[]>;
@@ -339,6 +360,13 @@ const electronAPI: ElectronAPI = {
     downloadHardwareDocs: () => ipcRenderer.invoke('docs-ingest/download-hardware-docs'),
     onStatus: (callback: (status: DocsIngestStatus) => void) =>
       createListener('docs-ingest/status', callback),
+  },
+
+  docsChunking: {
+    getStatus: () => ipcRenderer.invoke('docs-chunking/get-status'),
+    buildChunks: () => ipcRenderer.invoke('docs-chunking/build-chunks'),
+    onStatus: (callback: (status: DocsChunkingStatus) => void) =>
+      createListener('docs-chunking/status', callback),
   },
 
   aiChatStore: {

@@ -18,3 +18,5 @@ nul
 bin/enmon
 note
 *.p12
+
+my-docs/
