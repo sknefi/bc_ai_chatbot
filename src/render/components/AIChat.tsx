@@ -2,7 +2,14 @@ import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from '
 import ReactMarkdown from 'react-markdown';
 import { FiDownload, FiKey, FiMessageSquare, FiPlus, FiRefreshCw, FiSend, FiSettings, FiSquare, FiTrash2, FiX } from 'react-icons/fi';
 import remarkGfm from 'remark-gfm';
-import type { AIChatConversation, AIChatStoredMessage, DocsChunkingStatus, DocsEmbeddingsStatus, DocsIngestStatus } from '../../../electron/preload';
+import type {
+  AIChatConversation,
+  AIChatStoredMessage,
+  DocsChunkingStatus,
+  DocsEmbeddingsStatus,
+  DocsIngestStatus,
+  DocsRetrievalResponse,
+} from '../../../electron/preload';
 
 interface ChatMessage {
   id: string;
@@ -187,6 +194,11 @@ export default function AIChat() {
     error: '',
     hasEmbeddings: false,
   });
+  const [retrievalQuery, setRetrievalQuery] = useState('');
+  const [retrievalTopK, setRetrievalTopK] = useState('5');
+  const [retrievalResult, setRetrievalResult] = useState<DocsRetrievalResponse | null>(null);
+  const [retrievalError, setRetrievalError] = useState('');
+  const [isRetrieving, setIsRetrieving] = useState(false);
 
   const currentRequestIdRef = useRef<string | null>(null);
   const currentAssistantIdRef = useRef<string | null>(null);
@@ -521,6 +533,31 @@ export default function AIChat() {
         message,
         error: message,
       }));
+    }
+  };
+
+  const handleRetrieveChunks = async () => {
+    const query = retrievalQuery.trim();
+    if (!query) {
+      setRetrievalError('Retrieval query cannot be empty.');
+      return;
+    }
+
+    setIsRetrieving(true);
+    setRetrievalError('');
+
+    try {
+      const result = await window.electronAPI.docsRetrieval.retrieveChunks({
+        query,
+        topK: Number(retrievalTopK) || 5,
+      });
+      setRetrievalResult(result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to retrieve chunks.';
+      setRetrievalError(message);
+      setRetrievalResult(null);
+    } finally {
+      setIsRetrieving(false);
     }
   };
 
@@ -1337,6 +1374,95 @@ export default function AIChat() {
                       ? `Embedding rebuild failed, but the previous embedding set is still available: ${docsEmbeddingsStatus.error}`
                       : docsEmbeddingsStatus.error}
                   </p>
+                ) : null}
+              </div>
+
+              <div className="rounded border border-gray-200 bg-gray-50 p-3 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-medium text-gray-900">Semantic Retrieval</h3>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Test query embedding and top-k chunk retrieval against the stored semantic index.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-[1fr_96px_auto] gap-2">
+                  <input
+                    type="text"
+                    value={retrievalQuery}
+                    onChange={(event) => setRetrievalQuery(event.target.value)}
+                    placeholder="Ask a hardware question for retrieval testing..."
+                    className="px-3 py-2 border border-gray-300 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-hardwario-primary focus:border-transparent"
+                  />
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={retrievalTopK}
+                    onChange={(event) => setRetrievalTopK(event.target.value)}
+                    className="px-3 py-2 border border-gray-300 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-hardwario-primary focus:border-transparent"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleRetrieveChunks()}
+                    disabled={isRetrieving || !docsEmbeddingsStatus.hasEmbeddings}
+                    className="h-10 px-4 bg-gray-900 text-white font-medium rounded hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isRetrieving ? (
+                      <>
+                        <FiRefreshCw className="w-4 h-4 animate-spin" />
+                        Retrieving
+                      </>
+                    ) : (
+                      'Retrieve Chunks'
+                    )}
+                  </button>
+                </div>
+
+                {retrievalError ? (
+                  <p className="text-xs text-red-600">{retrievalError}</p>
+                ) : null}
+
+                {retrievalResult ? (
+                  <div className="space-y-2">
+                    <div className="text-xs text-gray-600">
+                      Returned {retrievalResult.resultCount} chunks using `{retrievalResult.embeddingModel}`.
+                    </div>
+                    <div className="space-y-2">
+                      {retrievalResult.results.map((result, index) => (
+                        <div key={result.chunkId} className="rounded border border-gray-200 bg-white p-3 text-xs text-gray-700 space-y-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="font-medium text-gray-900">
+                              {index + 1}. {result.title} / {result.heading}
+                            </div>
+                            <div className="font-mono text-gray-500">
+                              score {result.score.toFixed(4)}
+                            </div>
+                          </div>
+                          <div className="font-mono break-all text-gray-500">{result.path}</div>
+                          <div className="line-clamp-6 whitespace-pre-wrap">{result.text}</div>
+                          {result.relatedLinks.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {result.relatedLinks.map((link) => (
+                                <button
+                                  key={`${result.chunkId}-${link.url}`}
+                                  type="button"
+                                  onClick={() => void window.electronAPI.shell.openExternal(link.url)}
+                                  className="px-2 py-1 rounded bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                                  title={link.url}
+                                >
+                                  {link.label}
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 ) : null}
               </div>
             </div>

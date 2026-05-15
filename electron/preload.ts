@@ -140,6 +140,33 @@ export interface DocsEmbeddingsStatus {
   hasEmbeddings: boolean;
 }
 
+export interface DocsRetrievalLink {
+  kind: string;
+  label: string;
+  url: string;
+}
+
+export interface DocsRetrievalResult {
+  chunkId: string;
+  path: string;
+  title: string;
+  heading: string;
+  sectionPath: string[];
+  text: string;
+  tokenEstimate: number;
+  githubBlobUrl: string;
+  relatedLinks: DocsRetrievalLink[];
+  score: number;
+}
+
+export interface DocsRetrievalResponse {
+  query: string;
+  topK: number;
+  embeddingModel: string;
+  resultCount: number;
+  results: DocsRetrievalResult[];
+}
+
 export interface AIChatConversation {
   id: string;
   title: string;
@@ -250,6 +277,9 @@ export interface ElectronAPI {
     getStatus: () => Promise<DocsEmbeddingsStatus>;
     buildEmbeddings: () => Promise<DocsEmbeddingsStatus>;
     onStatus: (callback: (status: DocsEmbeddingsStatus) => void) => () => void;
+  };
+  docsRetrieval: {
+    retrieveChunks: (input: { query: string; topK?: number }) => Promise<DocsRetrievalResponse>;
   };
   aiChatStore: {
     listConversations: () => Promise<AIChatConversation[]>;
@@ -395,6 +425,11 @@ const electronAPI: ElectronAPI = {
     buildEmbeddings: () => ipcRenderer.invoke('docs-embeddings/build-embeddings'),
     onStatus: (callback: (status: DocsEmbeddingsStatus) => void) =>
       createListener('docs-embeddings/status', callback),
+  },
+
+  docsRetrieval: {
+    retrieveChunks: (input: { query: string; topK?: number }) =>
+      ipcRenderer.invoke('docs-retrieval/retrieve-chunks', input),
   },
 
   aiChatStore: {

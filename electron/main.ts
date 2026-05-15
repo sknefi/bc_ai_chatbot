@@ -26,6 +26,7 @@ const AIChatStore = require('../src/background/AIChatStore');
 const DocsIngest = require('../src/background/DocsIngest');
 const DocsChunking = require('../src/background/DocsChunking');
 const DocsEmbeddings = require('../src/background/DocsEmbeddings');
+const DocsRetrieval = require('../src/background/DocsRetrieval');
 const CustomMenu = require('../src/utils/Menu');
 
 // Enable context menu
@@ -131,6 +132,7 @@ AIChatStore.setup();
 DocsIngest.setup();
 DocsChunking.setup();
 DocsEmbeddings.setup();
+DocsRetrieval.setup();
 MqttBroker.setup();
 Gateway.setup();
 Firmware.setup();
