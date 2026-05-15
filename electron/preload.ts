@@ -124,6 +124,22 @@ export interface DocsChunkingStatus {
   hasChunks: boolean;
 }
 
+export interface DocsEmbeddingsStatus {
+  state: 'idle' | 'running' | 'success' | 'error';
+  message: string;
+  sourceId: string;
+  outputPath: string;
+  manifestPath: string;
+  totalChunks: number;
+  completedChunks: number;
+  embeddingCount: number;
+  embeddingModel: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  error: string;
+  hasEmbeddings: boolean;
+}
+
 export interface AIChatConversation {
   id: string;
   title: string;
@@ -229,6 +245,11 @@ export interface ElectronAPI {
     getStatus: () => Promise<DocsChunkingStatus>;
     buildChunks: () => Promise<DocsChunkingStatus>;
     onStatus: (callback: (status: DocsChunkingStatus) => void) => () => void;
+  };
+  docsEmbeddings: {
+    getStatus: () => Promise<DocsEmbeddingsStatus>;
+    buildEmbeddings: () => Promise<DocsEmbeddingsStatus>;
+    onStatus: (callback: (status: DocsEmbeddingsStatus) => void) => () => void;
   };
   aiChatStore: {
     listConversations: () => Promise<AIChatConversation[]>;
@@ -367,6 +388,13 @@ const electronAPI: ElectronAPI = {
     buildChunks: () => ipcRenderer.invoke('docs-chunking/build-chunks'),
     onStatus: (callback: (status: DocsChunkingStatus) => void) =>
       createListener('docs-chunking/status', callback),
+  },
+
+  docsEmbeddings: {
+    getStatus: () => ipcRenderer.invoke('docs-embeddings/get-status'),
+    buildEmbeddings: () => ipcRenderer.invoke('docs-embeddings/build-embeddings'),
+    onStatus: (callback: (status: DocsEmbeddingsStatus) => void) =>
+      createListener('docs-embeddings/status', callback),
   },
 
   aiChatStore: {

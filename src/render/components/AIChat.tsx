@@ -2,7 +2,7 @@ import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from '
 import ReactMarkdown from 'react-markdown';
 import { FiDownload, FiKey, FiMessageSquare, FiPlus, FiRefreshCw, FiSend, FiSettings, FiSquare, FiTrash2, FiX } from 'react-icons/fi';
 import remarkGfm from 'remark-gfm';
-import type { AIChatConversation, AIChatStoredMessage, DocsChunkingStatus, DocsIngestStatus } from '../../../electron/preload';
+import type { AIChatConversation, AIChatStoredMessage, DocsChunkingStatus, DocsEmbeddingsStatus, DocsIngestStatus } from '../../../electron/preload';
 
 interface ChatMessage {
   id: string;
@@ -172,6 +172,21 @@ export default function AIChat() {
     error: '',
     hasChunks: false,
   });
+  const [docsEmbeddingsStatus, setDocsEmbeddingsStatus] = useState<DocsEmbeddingsStatus>({
+    state: 'idle',
+    message: 'Embeddings not built yet.',
+    sourceId: 'hardwario-docs',
+    outputPath: '',
+    manifestPath: '',
+    totalChunks: 0,
+    completedChunks: 0,
+    embeddingCount: 0,
+    embeddingModel: 'openai/text-embedding-3-small',
+    startedAt: null,
+    finishedAt: null,
+    error: '',
+    hasEmbeddings: false,
+  });
 
   const currentRequestIdRef = useRef<string | null>(null);
   const currentAssistantIdRef = useRef<string | null>(null);
@@ -203,6 +218,15 @@ export default function AIChat() {
       setDocsChunkingStatus(status);
     } catch (error) {
       console.error('Failed to refresh docs chunking status.', error);
+    }
+  };
+
+  const loadDocsEmbeddingsStatus = async () => {
+    try {
+      const status = await window.electronAPI.docsEmbeddings.getStatus();
+      setDocsEmbeddingsStatus(status);
+    } catch (error) {
+      console.error('Failed to refresh docs embeddings status.', error);
     }
   };
 
@@ -284,6 +308,7 @@ export default function AIChat() {
 
     void loadDocsStatus();
     void loadDocsChunkingStatus();
+    void loadDocsEmbeddingsStatus();
     void refreshConversations().finally(() => {
       setIsLoadingConversations(false);
     });
@@ -382,11 +407,18 @@ export default function AIChat() {
     });
     const unsubDocsChunkingStatus = window.electronAPI.docsChunking.onStatus((status) => {
       setDocsChunkingStatus(status);
+      if (status.state !== 'running') {
+        void loadDocsEmbeddingsStatus();
+      }
+    });
+    const unsubDocsEmbeddingsStatus = window.electronAPI.docsEmbeddings.onStatus((status) => {
+      setDocsEmbeddingsStatus(status);
     });
 
     const handleWindowFocus = () => {
       void loadDocsStatus();
       void loadDocsChunkingStatus();
+      void loadDocsEmbeddingsStatus();
     };
 
     window.addEventListener('focus', handleWindowFocus);
@@ -394,6 +426,7 @@ export default function AIChat() {
     return () => {
       unsubDocsStatus();
       unsubDocsChunkingStatus();
+      unsubDocsEmbeddingsStatus();
       window.removeEventListener('focus', handleWindowFocus);
     };
   }, []);
@@ -464,9 +497,25 @@ export default function AIChat() {
     try {
       const status = await window.electronAPI.docsChunking.buildChunks();
       setDocsChunkingStatus(status);
+      void loadDocsEmbeddingsStatus();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start chunk build.';
       setDocsChunkingStatus((prev) => ({
+        ...prev,
+        state: 'error',
+        message,
+        error: message,
+      }));
+    }
+  };
+
+  const handleBuildEmbeddings = async () => {
+    try {
+      const status = await window.electronAPI.docsEmbeddings.buildEmbeddings();
+      setDocsEmbeddingsStatus(status);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to start embedding build.';
+      setDocsEmbeddingsStatus((prev) => ({
         ...prev,
         state: 'error',
         message,
@@ -715,6 +764,24 @@ export default function AIChat() {
     : docsChunkingStatus.hasChunks
       ? 'Ready'
       : docsChunkingStatus.state === 'error'
+        ? 'Unavailable'
+        : 'Missing';
+  const docsEmbeddingsProgressLabel = docsEmbeddingsStatus.totalChunks > 0
+    ? `${docsEmbeddingsStatus.completedChunks}/${docsEmbeddingsStatus.totalChunks} chunks`
+    : 'No embeddings built yet';
+  const docsEmbeddingsActionLabel = docsEmbeddingsStatus.hasEmbeddings ? 'Rebuild Embeddings' : 'Build Embeddings';
+  const docsEmbeddingsStateBadgeClassName = docsEmbeddingsStatus.state === 'running'
+    ? 'bg-amber-100 text-amber-800'
+    : docsEmbeddingsStatus.hasEmbeddings
+      ? 'bg-green-100 text-green-800'
+      : docsEmbeddingsStatus.state === 'error'
+        ? 'bg-red-100 text-red-800'
+        : 'bg-gray-200 text-gray-700';
+  const docsEmbeddingsStateBadgeLabel = docsEmbeddingsStatus.state === 'running'
+    ? 'Building'
+    : docsEmbeddingsStatus.hasEmbeddings
+      ? 'Ready'
+      : docsEmbeddingsStatus.state === 'error'
         ? 'Unavailable'
         : 'Missing';
   const activeConversation = conversations.find((conversation) => conversation.id === activeConversationId) || null;
@@ -1186,6 +1253,89 @@ export default function AIChat() {
                     {docsChunkingStatus.hasChunks
                       ? `Chunk rebuild failed, but the previous chunk set is still available: ${docsChunkingStatus.error}`
                       : docsChunkingStatus.error}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="rounded border border-gray-200 bg-gray-50 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-medium text-gray-900">Embeddings</h3>
+                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${docsEmbeddingsStateBadgeClassName}`}>
+                        {docsEmbeddingsStateBadgeLabel}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Generate a persistent semantic vector index for the current chunk set using OpenRouter embeddings.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleBuildEmbeddings()}
+                    disabled={docsEmbeddingsStatus.state === 'running' || !docsChunkingStatus.hasChunks || !hasApiKey}
+                    className="min-w-[180px] h-10 px-4 bg-gray-900 text-white font-medium rounded hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {docsEmbeddingsStatus.state === 'running' ? (
+                      <>
+                        <FiRefreshCw className="w-4 h-4 animate-spin" />
+                        Building
+                      </>
+                    ) : (
+                      <>
+                        <FiRefreshCw className="w-4 h-4" />
+                        {docsEmbeddingsActionLabel}
+                      </>
+                    )}
+                  </button>
+                </div>
+                {(docsEmbeddingsStatus.startedAt || docsEmbeddingsStatus.finishedAt) ? (
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+                    {docsEmbeddingsStatus.startedAt ? (
+                      <span>Started: {formatConversationDate(docsEmbeddingsStatus.startedAt)}</span>
+                    ) : null}
+                    {docsEmbeddingsStatus.finishedAt ? (
+                      <span>Finished: {formatConversationDate(docsEmbeddingsStatus.finishedAt)}</span>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <div className="grid grid-cols-1 gap-2 text-xs text-gray-600">
+                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                    <div className="font-medium text-gray-800">Status</div>
+                    <div>{docsEmbeddingsStatus.message}</div>
+                  </div>
+                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                    <div className="font-medium text-gray-800">Progress</div>
+                    <div>{docsEmbeddingsProgressLabel}</div>
+                  </div>
+                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                    <div className="font-medium text-gray-800">Embedding Count</div>
+                    <div>{docsEmbeddingsStatus.embeddingCount}</div>
+                  </div>
+                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                    <div className="font-medium text-gray-800">Embedding Model</div>
+                    <div className="font-mono break-all">{docsEmbeddingsStatus.embeddingModel}</div>
+                  </div>
+                  {docsEmbeddingsStatus.outputPath ? (
+                    <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                      <div className="font-medium text-gray-800">Embeddings Output Path</div>
+                      <div className="font-mono break-all">{docsEmbeddingsStatus.outputPath}</div>
+                    </div>
+                  ) : null}
+                  {docsEmbeddingsStatus.manifestPath ? (
+                    <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                      <div className="font-medium text-gray-800">Embeddings Manifest Path</div>
+                      <div className="font-mono break-all">{docsEmbeddingsStatus.manifestPath}</div>
+                    </div>
+                  ) : null}
+                </div>
+
+                {docsEmbeddingsStatus.error ? (
+                  <p className="text-xs text-red-600">
+                    {docsEmbeddingsStatus.hasEmbeddings
+                      ? `Embedding rebuild failed, but the previous embedding set is still available: ${docsEmbeddingsStatus.error}`
+                      : docsEmbeddingsStatus.error}
                   </p>
                 ) : null}
               </div>

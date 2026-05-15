@@ -5,6 +5,7 @@ const { createHash } = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const notifyAll = require("../utils/notifyAll");
+const DocsEmbeddings = require("./DocsEmbeddings");
 
 const STATUS_TOPIC = "docs-chunking/status";
 const SOURCE_ID = "hardwario-docs";
@@ -170,6 +171,7 @@ function hasStoredChunks() {
 
 function clearChunks() {
   fs.rmSync(getChunksRootPath(), { recursive: true, force: true });
+  DocsEmbeddings.clearEmbeddings();
   currentStatus = resolveCurrentStatus();
   notifyAll(STATUS_TOPIC, currentStatus);
 }
@@ -535,6 +537,7 @@ async function buildChunks() {
 
   fs.rmSync(chunksRoot, { recursive: true, force: true });
   fs.renameSync(tempRoot, chunksRoot);
+  DocsEmbeddings.clearEmbeddings();
 
   publishStatus({
     state: "success",
