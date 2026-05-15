@@ -17,6 +17,21 @@ const MODEL_OPTIONS = [
 
 const DEFAULT_MODEL = MODEL_OPTIONS[0].id;
 const activeRequests = new Map();
+const RETRIEVAL_TOP_K = 6;
+const HIGH_RELEVANCE_THRESHOLD = 0.75;
+const MEDIUM_RELEVANCE_THRESHOLD = 0.60;
+const LOW_RELEVANCE_THRESHOLD = 0.45;
+const LOW_RELEVANCE_FALLBACK_LIMIT = 3;
+const CHAT_SYSTEM_PROMPT = [
+  "You are assisting with HARDWARIO documentation questions inside HARDWARIO Playground.",
+  "When retrieved documentation context is provided, use it as the primary source for HARDWARIO-specific technical claims.",
+  "Prefer higher-relevance retrieved chunks over lower-relevance chunks.",
+  "If the retrieved context is insufficient or ambiguous, say that clearly instead of inventing details.",
+  "Do not invent HARDWARIO product behavior, APIs, firmware details, wiring steps, or Node-RED behavior that are not supported by the retrieved context.",
+  "When relevant, cite the source path and section heading you used.",
+  "Use useful links only when they are relevant to the answer and come from the retrieved context.",
+  "For simple greetings or general conversational messages that do not depend on documentation, you can answer normally.",
+].join("\n");
 
 function delay(ms, signal) {
   return new Promise((resolve, reject) => {
@@ -158,6 +173,156 @@ function normalizeMessages(messages) {
       return null;
     })
     .filter(Boolean);
+}
+
+function getLatestUserMessage(messages) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === "user") {
+      return messages[index];
+    }
+  }
+
+  return null;
+}
+
+function cleanupInlineMarkdown(text) {
+  return String(text || "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function groupRetrievedResults(results) {
+  const groups = {
+    high: [],
+    medium: [],
+    low: [],
+  };
+
+  for (const result of results) {
+    if (result.score >= HIGH_RELEVANCE_THRESHOLD) {
+      groups.high.push(result);
+      continue;
+    }
+
+    if (result.score >= MEDIUM_RELEVANCE_THRESHOLD) {
+      groups.medium.push(result);
+      continue;
+    }
+
+    if (result.score >= LOW_RELEVANCE_THRESHOLD) {
+      groups.low.push(result);
+    }
+  }
+
+  return groups;
+}
+
+function formatRetrievedChunk(result, index) {
+  const lines = [
+    `${index}. Path: ${result.path}`,
+    `   Heading: ${result.heading}`,
+    `   Score: ${result.score.toFixed(4)}`,
+    `   Text: ${result.text}`,
+  ];
+
+  if (Array.isArray(result.relatedLinks) && result.relatedLinks.length > 0) {
+    const links = result.relatedLinks
+      .slice(0, 4)
+      .map((link) => `${cleanupInlineMarkdown(link.label || link.kind || "Link")}: ${link.url}`)
+      .join(" | ");
+
+    if (links) {
+      lines.push(`   Useful links: ${links}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+function buildRetrievalContext(query, retrievalResult) {
+  const results = Array.isArray(retrievalResult?.results) ? retrievalResult.results : [];
+  const grouped = groupRetrievedResults(results);
+  const selected = [];
+
+  if (grouped.high.length > 0) {
+    selected.push({ label: "High relevance", items: grouped.high });
+  }
+
+  if (grouped.medium.length > 0) {
+    selected.push({ label: "Medium relevance", items: grouped.medium });
+  }
+
+  if (selected.length === 0 && grouped.low.length > 0) {
+    selected.push({
+      label: "Low relevance only",
+      items: grouped.low.slice(0, LOW_RELEVANCE_FALLBACK_LIMIT),
+    });
+  }
+
+  if (selected.length === 0) {
+    return [
+      "Retrieved documentation context for the current user question:",
+      `Question: ${query}`,
+      "No sufficiently relevant documentation chunks were retrieved.",
+      "If the question requires HARDWARIO-specific documentation, say that the retrieved documentation context is insufficient.",
+    ].join("\n");
+  }
+
+  const lines = [
+    "Retrieved documentation context for the current user question:",
+    `Question: ${query}`,
+    `Embedding model: ${retrievalResult.embeddingModel}`,
+  ];
+
+  if (grouped.high.length === 0 && grouped.medium.length === 0 && grouped.low.length > 0) {
+    lines.push("Only low-relevance chunks were retrieved. Answer cautiously and say when documentation support is weak.");
+  }
+
+  let resultIndex = 1;
+  for (const group of selected) {
+    lines.push("");
+    lines.push(`${group.label}:`);
+    for (const item of group.items) {
+      lines.push(formatRetrievedChunk(item, resultIndex));
+      resultIndex += 1;
+    }
+  }
+
+  return lines.join("\n");
+}
+
+async function buildAugmentedMessages(messages) {
+  const latestUserMessage = getLatestUserMessage(messages);
+  const finalMessages = [
+    { role: "system", content: CHAT_SYSTEM_PROMPT },
+  ];
+
+  if (latestUserMessage?.content) {
+    try {
+      const DocsRetrieval = require("./DocsRetrieval");
+      const retrievalResult = await DocsRetrieval.retrieveChunks({
+        query: latestUserMessage.content,
+        topK: RETRIEVAL_TOP_K,
+      });
+
+      finalMessages.push({
+        role: "system",
+        content: buildRetrievalContext(latestUserMessage.content, retrievalResult),
+      });
+    } catch (error) {
+      console.error("ai-chat: failed to retrieve documentation context", error);
+      finalMessages.push({
+        role: "system",
+        content: [
+          "Retrieved documentation context for the current user question is unavailable.",
+          "If the answer depends on HARDWARIO-specific documentation, say that the documentation context is unavailable or insufficient.",
+        ].join("\n"),
+      });
+    }
+  }
+
+  return finalMessages.concat(messages);
 }
 
 function sendSafe(sender, channel, payload) {
@@ -381,19 +546,24 @@ function setup() {
       activeRequests.delete(requestId);
     }
 
-    handleStream({
-      sender: event.sender,
-      requestId,
-      apiKey,
-      model,
-      messages,
-    }).catch((error) => {
-      console.error("ai-chat: stream handling failed", error);
-      sendSafe(event.sender, "ai-chat/error", {
-        requestId,
-        error: "Failed to process request.",
-      });
-    });
+    void (async () => {
+      try {
+        const augmentedMessages = await buildAugmentedMessages(messages);
+        await handleStream({
+          sender: event.sender,
+          requestId,
+          apiKey,
+          model,
+          messages: augmentedMessages,
+        });
+      } catch (error) {
+        console.error("ai-chat: stream handling failed", error);
+        sendSafe(event.sender, "ai-chat/error", {
+          requestId,
+          error: "Failed to process request.",
+        });
+      }
+    })();
   });
 
   ipcMain.on("ai-chat/cancel", (event, requestId) => {
