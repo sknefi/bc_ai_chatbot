@@ -1,6 +1,6 @@
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { FiDownload, FiKey, FiMessageSquare, FiPlus, FiRefreshCw, FiSend, FiSettings, FiSquare, FiTrash2, FiX } from 'react-icons/fi';
+import { FiChevronDown, FiChevronRight, FiDownload, FiKey, FiMessageSquare, FiPlus, FiRefreshCw, FiSend, FiSettings, FiSquare, FiTrash2, FiX } from 'react-icons/fi';
 import remarkGfm from 'remark-gfm';
 import type {
   AIChatConversation,
@@ -133,6 +133,12 @@ function formatConversationDate(value: string): string {
 }
 
 export default function AIChat() {
+  const [openOptionSections, setOpenOptionSections] = useState({
+    docs: true,
+    chunks: false,
+    embeddings: false,
+    retrieval: false,
+  });
   const [conversations, setConversations] = useState<AIChatConversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -214,6 +220,13 @@ export default function AIChat() {
     content: message.content,
     createdAt: message.createdAt,
   });
+
+  const toggleOptionsSection = (section: keyof typeof openOptionSections) => {
+    setOpenOptionSections((prev) => ({
+      ...prev,
+      [section]: !prev[section],
+    }));
+  };
 
   const loadDocsStatus = async () => {
     try {
@@ -1138,17 +1151,26 @@ export default function AIChat() {
 
               <div className="rounded border border-gray-200 bg-gray-50 p-3 space-y-2">
                 <div className="flex items-center justify-between gap-3">
-                  <div>
+                  <button
+                    type="button"
+                    onClick={() => toggleOptionsSection('docs')}
+                    className="min-w-0 flex-1 text-left"
+                  >
                     <div className="flex items-center gap-2">
+                      {openOptionSections.docs ? (
+                        <FiChevronDown className="w-4 h-4 text-gray-500 shrink-0" />
+                      ) : (
+                        <FiChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                      )}
                       <h3 className="text-sm font-medium text-gray-900">Documentation Ingestion</h3>
                       <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${docsStateBadgeClassName}`}>
                         {docsStateBadgeLabel}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-500">
+                    <p className="mt-1 text-xs text-gray-500">
                       Local-first testing control for `tower/hardware-modules/` from GitHub, excluding `images/`.
                     </p>
-                  </div>
+                  </button>
                   <button
                     type="button"
                     onClick={() => void handleDownloadDocs()}
@@ -1168,7 +1190,7 @@ export default function AIChat() {
                     )}
                   </button>
                 </div>
-                {(docsStatus.startedAt || docsStatus.finishedAt) ? (
+                {openOptionSections.docs && (docsStatus.startedAt || docsStatus.finishedAt) ? (
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
                     {docsStatus.startedAt ? (
                       <span>Started: {formatConversationDate(docsStatus.startedAt)}</span>
@@ -1179,55 +1201,68 @@ export default function AIChat() {
                   </div>
                 ) : null}
 
-                <div className="grid grid-cols-1 gap-2 text-xs text-gray-600">
-                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                    <div className="font-medium text-gray-800">Status</div>
-                    <div>{docsStatus.message}</div>
-                  </div>
-                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                    <div className="font-medium text-gray-800">Progress</div>
-                    <div>{docsProgressLabel}</div>
-                  </div>
-                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                    <div className="font-medium text-gray-800">Local Availability</div>
-                    <div>{docsStatus.hasLocalDocs ? 'Local corpus available on disk' : 'No local corpus yet'}</div>
-                  </div>
-                  {docsStatus.targetDir ? (
-                    <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                      <div className="font-medium text-gray-800">Raw Docs Path</div>
-                      <div className="font-mono break-all">{docsStatus.targetDir}</div>
+                {openOptionSections.docs ? (
+                  <>
+                    <div className="grid grid-cols-1 gap-2 text-xs text-gray-600">
+                      <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                        <div className="font-medium text-gray-800">Status</div>
+                        <div>{docsStatus.message}</div>
+                      </div>
+                      <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                        <div className="font-medium text-gray-800">Progress</div>
+                        <div>{docsProgressLabel}</div>
+                      </div>
+                      <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                        <div className="font-medium text-gray-800">Local Availability</div>
+                        <div>{docsStatus.hasLocalDocs ? 'Local corpus available on disk' : 'No local corpus yet'}</div>
+                      </div>
+                      {docsStatus.targetDir ? (
+                        <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                          <div className="font-medium text-gray-800">Raw Docs Path</div>
+                          <div className="font-mono break-all">{docsStatus.targetDir}</div>
+                        </div>
+                      ) : null}
+                      {docsStatus.manifestPath ? (
+                        <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                          <div className="font-medium text-gray-800">Manifest Path</div>
+                          <div className="font-mono break-all">{docsStatus.manifestPath}</div>
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
-                  {docsStatus.manifestPath ? (
-                    <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                      <div className="font-medium text-gray-800">Manifest Path</div>
-                      <div className="font-mono break-all">{docsStatus.manifestPath}</div>
-                    </div>
-                  ) : null}
-                </div>
 
-                {docsStatus.error ? (
-                  <p className="text-xs text-red-600">
-                    {docsStatus.hasLocalDocs
-                      ? `Refresh failed, but the previous local corpus is still available: ${docsStatus.error}`
-                      : docsStatus.error}
-                  </p>
+                    {docsStatus.error ? (
+                      <p className="text-xs text-red-600">
+                        {docsStatus.hasLocalDocs
+                          ? `Refresh failed, but the previous local corpus is still available: ${docsStatus.error}`
+                          : docsStatus.error}
+                      </p>
+                    ) : null}
+                  </>
                 ) : null}
               </div>
 
               <div className="rounded border border-gray-200 bg-gray-50 p-3 space-y-2">
                 <div className="flex items-center justify-between gap-3">
-                  <div>
+                  <button
+                    type="button"
+                    onClick={() => toggleOptionsSection('chunks')}
+                    className="min-w-0 flex-1 text-left"
+                  >
                     <div className="flex items-center gap-2">
+                      {openOptionSections.chunks ? (
+                        <FiChevronDown className="w-4 h-4 text-gray-500 shrink-0" />
+                      ) : (
+                        <FiChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                      )}
                       <h3 className="text-sm font-medium text-gray-900">Chunk Generation</h3>
                       <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${docsChunkingStateBadgeClassName}`}>
                         {docsChunkingStateBadgeLabel}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-500">
+                    <p className="mt-1 text-xs text-gray-500">
                       Build persisted chunk records directly from the downloaded raw markdown.
                     </p>
-                  </div>
+                  </button>
                   <button
                     type="button"
                     onClick={() => void handleBuildChunks()}
@@ -1247,7 +1282,7 @@ export default function AIChat() {
                     )}
                   </button>
                 </div>
-                {(docsChunkingStatus.startedAt || docsChunkingStatus.finishedAt) ? (
+                {openOptionSections.chunks && (docsChunkingStatus.startedAt || docsChunkingStatus.finishedAt) ? (
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
                     {docsChunkingStatus.startedAt ? (
                       <span>Started: {formatConversationDate(docsChunkingStatus.startedAt)}</span>
@@ -1258,55 +1293,68 @@ export default function AIChat() {
                   </div>
                 ) : null}
 
-                <div className="grid grid-cols-1 gap-2 text-xs text-gray-600">
-                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                    <div className="font-medium text-gray-800">Status</div>
-                    <div>{docsChunkingStatus.message}</div>
-                  </div>
-                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                    <div className="font-medium text-gray-800">Progress</div>
-                    <div>{docsChunkingProgressLabel}</div>
-                  </div>
-                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                    <div className="font-medium text-gray-800">Chunk Count</div>
-                    <div>{docsChunkingStatus.chunkCount}</div>
-                  </div>
-                  {docsChunkingStatus.outputPath ? (
-                    <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                      <div className="font-medium text-gray-800">Chunks Output Path</div>
-                      <div className="font-mono break-all">{docsChunkingStatus.outputPath}</div>
+                {openOptionSections.chunks ? (
+                  <>
+                    <div className="grid grid-cols-1 gap-2 text-xs text-gray-600">
+                      <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                        <div className="font-medium text-gray-800">Status</div>
+                        <div>{docsChunkingStatus.message}</div>
+                      </div>
+                      <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                        <div className="font-medium text-gray-800">Progress</div>
+                        <div>{docsChunkingProgressLabel}</div>
+                      </div>
+                      <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                        <div className="font-medium text-gray-800">Chunk Count</div>
+                        <div>{docsChunkingStatus.chunkCount}</div>
+                      </div>
+                      {docsChunkingStatus.outputPath ? (
+                        <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                          <div className="font-medium text-gray-800">Chunks Output Path</div>
+                          <div className="font-mono break-all">{docsChunkingStatus.outputPath}</div>
+                        </div>
+                      ) : null}
+                      {docsChunkingStatus.manifestPath ? (
+                        <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                          <div className="font-medium text-gray-800">Chunks Manifest Path</div>
+                          <div className="font-mono break-all">{docsChunkingStatus.manifestPath}</div>
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
-                  {docsChunkingStatus.manifestPath ? (
-                    <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                      <div className="font-medium text-gray-800">Chunks Manifest Path</div>
-                      <div className="font-mono break-all">{docsChunkingStatus.manifestPath}</div>
-                    </div>
-                  ) : null}
-                </div>
 
-                {docsChunkingStatus.error ? (
-                  <p className="text-xs text-red-600">
-                    {docsChunkingStatus.hasChunks
-                      ? `Chunk rebuild failed, but the previous chunk set is still available: ${docsChunkingStatus.error}`
-                      : docsChunkingStatus.error}
-                  </p>
+                    {docsChunkingStatus.error ? (
+                      <p className="text-xs text-red-600">
+                        {docsChunkingStatus.hasChunks
+                          ? `Chunk rebuild failed, but the previous chunk set is still available: ${docsChunkingStatus.error}`
+                          : docsChunkingStatus.error}
+                      </p>
+                    ) : null}
+                  </>
                 ) : null}
               </div>
 
               <div className="rounded border border-gray-200 bg-gray-50 p-3 space-y-2">
                 <div className="flex items-center justify-between gap-3">
-                  <div>
+                  <button
+                    type="button"
+                    onClick={() => toggleOptionsSection('embeddings')}
+                    className="min-w-0 flex-1 text-left"
+                  >
                     <div className="flex items-center gap-2">
+                      {openOptionSections.embeddings ? (
+                        <FiChevronDown className="w-4 h-4 text-gray-500 shrink-0" />
+                      ) : (
+                        <FiChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                      )}
                       <h3 className="text-sm font-medium text-gray-900">Embeddings</h3>
                       <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${docsEmbeddingsStateBadgeClassName}`}>
                         {docsEmbeddingsStateBadgeLabel}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-500">
+                    <p className="mt-1 text-xs text-gray-500">
                       Generate a persistent semantic vector index for the current chunk set using OpenRouter embeddings.
                     </p>
-                  </div>
+                  </button>
                   <button
                     type="button"
                     onClick={() => void handleBuildEmbeddings()}
@@ -1326,7 +1374,7 @@ export default function AIChat() {
                     )}
                   </button>
                 </div>
-                {(docsEmbeddingsStatus.startedAt || docsEmbeddingsStatus.finishedAt) ? (
+                {openOptionSections.embeddings && (docsEmbeddingsStatus.startedAt || docsEmbeddingsStatus.finishedAt) ? (
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
                     {docsEmbeddingsStatus.startedAt ? (
                       <span>Started: {formatConversationDate(docsEmbeddingsStatus.startedAt)}</span>
@@ -1337,132 +1385,149 @@ export default function AIChat() {
                   </div>
                 ) : null}
 
-                <div className="grid grid-cols-1 gap-2 text-xs text-gray-600">
-                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                    <div className="font-medium text-gray-800">Status</div>
-                    <div>{docsEmbeddingsStatus.message}</div>
-                  </div>
-                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                    <div className="font-medium text-gray-800">Progress</div>
-                    <div>{docsEmbeddingsProgressLabel}</div>
-                  </div>
-                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                    <div className="font-medium text-gray-800">Embedding Count</div>
-                    <div>{docsEmbeddingsStatus.embeddingCount}</div>
-                  </div>
-                  <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                    <div className="font-medium text-gray-800">Embedding Model</div>
-                    <div className="font-mono break-all">{docsEmbeddingsStatus.embeddingModel}</div>
-                  </div>
-                  {docsEmbeddingsStatus.outputPath ? (
-                    <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                      <div className="font-medium text-gray-800">Embeddings Output Path</div>
-                      <div className="font-mono break-all">{docsEmbeddingsStatus.outputPath}</div>
+                {openOptionSections.embeddings ? (
+                  <>
+                    <div className="grid grid-cols-1 gap-2 text-xs text-gray-600">
+                      <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                        <div className="font-medium text-gray-800">Status</div>
+                        <div>{docsEmbeddingsStatus.message}</div>
+                      </div>
+                      <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                        <div className="font-medium text-gray-800">Progress</div>
+                        <div>{docsEmbeddingsProgressLabel}</div>
+                      </div>
+                      <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                        <div className="font-medium text-gray-800">Embedding Count</div>
+                        <div>{docsEmbeddingsStatus.embeddingCount}</div>
+                      </div>
+                      <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                        <div className="font-medium text-gray-800">Embedding Model</div>
+                        <div className="font-mono break-all">{docsEmbeddingsStatus.embeddingModel}</div>
+                      </div>
+                      {docsEmbeddingsStatus.outputPath ? (
+                        <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                          <div className="font-medium text-gray-800">Embeddings Output Path</div>
+                          <div className="font-mono break-all">{docsEmbeddingsStatus.outputPath}</div>
+                        </div>
+                      ) : null}
+                      {docsEmbeddingsStatus.manifestPath ? (
+                        <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                          <div className="font-medium text-gray-800">Embeddings Manifest Path</div>
+                          <div className="font-mono break-all">{docsEmbeddingsStatus.manifestPath}</div>
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
-                  {docsEmbeddingsStatus.manifestPath ? (
-                    <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                      <div className="font-medium text-gray-800">Embeddings Manifest Path</div>
-                      <div className="font-mono break-all">{docsEmbeddingsStatus.manifestPath}</div>
-                    </div>
-                  ) : null}
-                </div>
 
-                {docsEmbeddingsStatus.error ? (
-                  <p className="text-xs text-red-600">
-                    {docsEmbeddingsStatus.hasEmbeddings
-                      ? `Embedding rebuild failed, but the previous embedding set is still available: ${docsEmbeddingsStatus.error}`
-                      : docsEmbeddingsStatus.error}
-                  </p>
+                    {docsEmbeddingsStatus.error ? (
+                      <p className="text-xs text-red-600">
+                        {docsEmbeddingsStatus.hasEmbeddings
+                          ? `Embedding rebuild failed, but the previous embedding set is still available: ${docsEmbeddingsStatus.error}`
+                          : docsEmbeddingsStatus.error}
+                      </p>
+                    ) : null}
+                  </>
                 ) : null}
               </div>
 
               <div className="rounded border border-gray-200 bg-gray-50 p-3 space-y-3">
                 <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-medium text-gray-900">Semantic Retrieval</h3>
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      Test query embedding and top-k chunk retrieval against the stored semantic index.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-[1fr_96px_auto] gap-2">
-                  <input
-                    type="text"
-                    value={retrievalQuery}
-                    onChange={(event) => setRetrievalQuery(event.target.value)}
-                    placeholder="Ask a hardware question for retrieval testing..."
-                    className="px-3 py-2 border border-gray-300 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-hardwario-primary focus:border-transparent"
-                  />
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={retrievalTopK}
-                    onChange={(event) => setRetrievalTopK(event.target.value)}
-                    className="px-3 py-2 border border-gray-300 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-hardwario-primary focus:border-transparent"
-                  />
                   <button
                     type="button"
-                    onClick={() => void handleRetrieveChunks()}
-                    disabled={isRetrieving || !docsEmbeddingsStatus.hasEmbeddings}
-                    className="h-10 px-4 bg-gray-900 text-white font-medium rounded hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    onClick={() => toggleOptionsSection('retrieval')}
+                    className="min-w-0 flex-1 text-left"
                   >
-                    {isRetrieving ? (
-                      <>
-                        <FiRefreshCw className="w-4 h-4 animate-spin" />
-                        Retrieving
-                      </>
-                    ) : (
-                      'Retrieve Chunks'
-                    )}
+                    <div className="flex items-center gap-2">
+                      {openOptionSections.retrieval ? (
+                        <FiChevronDown className="w-4 h-4 text-gray-500 shrink-0" />
+                      ) : (
+                        <FiChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                      )}
+                      <h3 className="text-sm font-medium text-gray-900">Semantic Retrieval</h3>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Test query embedding and top-k chunk retrieval against the stored semantic index.
+                    </p>
                   </button>
                 </div>
 
-                {retrievalError ? (
-                  <p className="text-xs text-red-600">{retrievalError}</p>
-                ) : null}
+                {openOptionSections.retrieval ? (
+                  <>
+                    <div className="grid grid-cols-[1fr_96px_auto] gap-2">
+                      <input
+                        type="text"
+                        value={retrievalQuery}
+                        onChange={(event) => setRetrievalQuery(event.target.value)}
+                        placeholder="Ask a hardware question for retrieval testing..."
+                        className="px-3 py-2 border border-gray-300 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-hardwario-primary focus:border-transparent"
+                      />
+                      <input
+                        type="number"
+                        min={1}
+                        max={20}
+                        value={retrievalTopK}
+                        onChange={(event) => setRetrievalTopK(event.target.value)}
+                        className="px-3 py-2 border border-gray-300 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-hardwario-primary focus:border-transparent"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void handleRetrieveChunks()}
+                        disabled={isRetrieving || !docsEmbeddingsStatus.hasEmbeddings}
+                        className="h-10 px-4 bg-gray-900 text-white font-medium rounded hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        {isRetrieving ? (
+                          <>
+                            <FiRefreshCw className="w-4 h-4 animate-spin" />
+                            Retrieving
+                          </>
+                        ) : (
+                          'Retrieve Chunks'
+                        )}
+                      </button>
+                    </div>
 
-                {retrievalResult ? (
-                  <div className="space-y-2">
-                    <div className="text-xs text-gray-600">
-                      Returned {retrievalResult.resultCount} chunks using `{retrievalResult.embeddingModel}`.
-                    </div>
-                    <div className="space-y-2">
-                      {retrievalResult.results.map((result, index) => (
-                        <div key={result.chunkId} className="rounded border border-gray-200 bg-white p-3 text-xs text-gray-700 space-y-2">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="font-medium text-gray-900">
-                              {index + 1}. {result.title} / {result.heading}
-                            </div>
-                            <div className="font-mono text-gray-500">
-                              score {result.score.toFixed(4)}
-                            </div>
-                          </div>
-                          <div className="font-mono break-all text-gray-500">{result.path}</div>
-                          <div className="line-clamp-6 whitespace-pre-wrap">{result.text}</div>
-                          {result.relatedLinks.length > 0 ? (
-                            <div className="flex flex-wrap gap-2">
-                              {result.relatedLinks.map((link) => (
-                                <button
-                                  key={`${result.chunkId}-${link.url}`}
-                                  type="button"
-                                  onClick={() => void window.electronAPI.shell.openExternal(link.url)}
-                                  className="px-2 py-1 rounded bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
-                                  title={link.url}
-                                >
-                                  {link.label}
-                                </button>
-                              ))}
-                            </div>
-                          ) : null}
+                    {retrievalError ? (
+                      <p className="text-xs text-red-600">{retrievalError}</p>
+                    ) : null}
+
+                    {retrievalResult ? (
+                      <div className="space-y-2">
+                        <div className="text-xs text-gray-600">
+                          Returned {retrievalResult.resultCount} chunks using `{retrievalResult.embeddingModel}`.
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                        <div className="space-y-2">
+                          {retrievalResult.results.map((result, index) => (
+                            <div key={result.chunkId} className="rounded border border-gray-200 bg-white p-3 text-xs text-gray-700 space-y-2">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="font-medium text-gray-900">
+                                  {index + 1}. {result.title} / {result.heading}
+                                </div>
+                                <div className="font-mono text-gray-500">
+                                  score {result.score.toFixed(4)}
+                                </div>
+                              </div>
+                              <div className="font-mono break-all text-gray-500">{result.path}</div>
+                              <div className="line-clamp-6 whitespace-pre-wrap">{result.text}</div>
+                              {result.relatedLinks.length > 0 ? (
+                                <div className="flex flex-wrap gap-2">
+                                  {result.relatedLinks.map((link) => (
+                                    <button
+                                      key={`${result.chunkId}-${link.url}`}
+                                      type="button"
+                                      onClick={() => void window.electronAPI.shell.openExternal(link.url)}
+                                      className="px-2 py-1 rounded border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors"
+                                      title={link.url}
+                                    >
+                                      {link.label.replace(/\*\*/g, '')}
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
                 ) : null}
               </div>
             </div>
