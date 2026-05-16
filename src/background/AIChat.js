@@ -26,7 +26,10 @@ const CHAT_SYSTEM_PROMPT = [
   "You are assisting with HARDWARIO documentation questions inside HARDWARIO Playground.",
   "When retrieved documentation context is provided, use it as the primary source for HARDWARIO-specific technical claims.",
   "Prefer higher-relevance retrieved chunks over lower-relevance chunks.",
-  "If the retrieved context is insufficient or ambiguous, say that clearly instead of inventing details.",
+  "If the retrieved context is insufficient, ambiguous, or low-relevance, say that clearly instead of inventing details.",
+  "Do not answer HARDWARIO-specific hardware, firmware, connectors, wiring, APIs, or Node-RED questions from generic world knowledge when the retrieved documentation does not support the claim.",
+  "If the user asks a follow-up question that depends on previous HARDWARIO context, use the retrieved context and the recent user conversation context together, and ask for clarification if the product or module is still ambiguous.",
+  "If the user wants to buy hardware and the retrieved context identifies a relevant HARDWARIO product, recommend the HARDWARIO product and use the retrieved store link when available.",
   "Do not invent HARDWARIO product behavior, APIs, firmware details, wiring steps, or Node-RED behavior that are not supported by the retrieved context.",
   "When relevant, cite the source path and section heading you used.",
   "Use useful links only when they are relevant to the answer and come from the retrieved context.",
@@ -185,6 +188,20 @@ function getLatestUserMessage(messages) {
   return null;
 }
 
+function getRecentUserMessages(messages, limit = 2) {
+  const userMessages = [];
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === "user") {
+      userMessages.push(messages[index]);
+      if (userMessages.length >= limit) {
+        break;
+      }
+    }
+  }
+
+  return userMessages.reverse();
+}
+
 function cleanupInlineMarkdown(text) {
   return String(text || "")
     .replace(/\*\*(.*?)\*\*/g, "$1")
@@ -218,6 +235,28 @@ function groupRetrievedResults(results) {
   return groups;
 }
 
+function selectRetrievedGroups(results) {
+  const grouped = groupRetrievedResults(results);
+  const selected = [];
+
+  if (grouped.high.length > 0) {
+    selected.push({ label: "High relevance", items: grouped.high });
+  }
+
+  if (grouped.medium.length > 0) {
+    selected.push({ label: "Medium relevance", items: grouped.medium });
+  }
+
+  if (selected.length === 0 && grouped.low.length > 0) {
+    selected.push({
+      label: "Low relevance only",
+      items: grouped.low.slice(0, LOW_RELEVANCE_FALLBACK_LIMIT),
+    });
+  }
+
+  return { grouped, selected };
+}
+
 function formatRetrievedChunk(result, index) {
   const lines = [
     `${index}. Path: ${result.path}`,
@@ -242,23 +281,7 @@ function formatRetrievedChunk(result, index) {
 
 function buildRetrievalContext(query, retrievalResult) {
   const results = Array.isArray(retrievalResult?.results) ? retrievalResult.results : [];
-  const grouped = groupRetrievedResults(results);
-  const selected = [];
-
-  if (grouped.high.length > 0) {
-    selected.push({ label: "High relevance", items: grouped.high });
-  }
-
-  if (grouped.medium.length > 0) {
-    selected.push({ label: "Medium relevance", items: grouped.medium });
-  }
-
-  if (selected.length === 0 && grouped.low.length > 0) {
-    selected.push({
-      label: "Low relevance only",
-      items: grouped.low.slice(0, LOW_RELEVANCE_FALLBACK_LIMIT),
-    });
-  }
+  const { grouped, selected } = selectRetrievedGroups(results);
 
   if (selected.length === 0) {
     return [
@@ -292,24 +315,104 @@ function buildRetrievalContext(query, retrievalResult) {
   return lines.join("\n");
 }
 
+function buildRetrievalQuery(messages) {
+  const recentUserMessages = getRecentUserMessages(messages, 2);
+  const latestUserMessage = recentUserMessages[recentUserMessages.length - 1];
+
+  if (!latestUserMessage?.content) {
+    return "";
+  }
+
+  const lines = [`Current user question: ${latestUserMessage.content}`];
+  if (recentUserMessages.length > 1) {
+    lines.push(`Previous user question: ${recentUserMessages[0].content}`);
+  }
+
+  return lines.join("\n");
+}
+
+function buildAssistantAppendix(retrievalResult) {
+  const results = Array.isArray(retrievalResult?.results) ? retrievalResult.results : [];
+  const { selected } = selectRetrievedGroups(results);
+  const selectedItems = selected.flatMap((group) => group.items);
+
+  if (selectedItems.length === 0) {
+    return "";
+  }
+
+  const sources = [];
+  const sourceKeys = new Set();
+  for (const item of selectedItems) {
+    const key = `${item.path}::${item.heading}`;
+    if (sourceKeys.has(key)) {
+      continue;
+    }
+
+    sourceKeys.add(key);
+    sources.push({
+      label: `${item.path} / ${item.heading}`,
+      url: item.githubBlobUrl || "",
+    });
+  }
+
+  const links = [];
+  const linkUrls = new Set();
+  for (const item of selectedItems) {
+    for (const link of item.relatedLinks || []) {
+      if (!link?.url || linkUrls.has(link.url)) {
+        continue;
+      }
+
+      linkUrls.add(link.url);
+      links.push({
+        label: cleanupInlineMarkdown(link.label || link.kind || "Link"),
+        url: link.url,
+      });
+    }
+  }
+
+  const lines = [];
+  if (sources.length > 0) {
+    lines.push("Sources:");
+    for (const source of sources) {
+      lines.push(source.url ? `- [${source.label}](${source.url})` : `- ${source.label}`);
+    }
+  }
+
+  if (links.length > 0) {
+    if (lines.length > 0) {
+      lines.push("");
+    }
+    lines.push("Useful links:");
+    for (const link of links) {
+      lines.push(`- [${link.label}](${link.url})`);
+    }
+  }
+
+  return lines.length > 0 ? `\n\n${lines.join("\n")}` : "";
+}
+
 async function buildAugmentedMessages(messages) {
   const latestUserMessage = getLatestUserMessage(messages);
+  const retrievalQuery = buildRetrievalQuery(messages);
   const finalMessages = [
     { role: "system", content: CHAT_SYSTEM_PROMPT },
   ];
+  let assistantAppendix = "";
 
-  if (latestUserMessage?.content) {
+  if (latestUserMessage?.content && retrievalQuery) {
     try {
       const DocsRetrieval = require("./DocsRetrieval");
       const retrievalResult = await DocsRetrieval.retrieveChunks({
-        query: latestUserMessage.content,
+        query: retrievalQuery,
         topK: RETRIEVAL_TOP_K,
       });
 
       finalMessages.push({
         role: "system",
-        content: buildRetrievalContext(latestUserMessage.content, retrievalResult),
+        content: buildRetrievalContext(retrievalQuery, retrievalResult),
       });
+      assistantAppendix = buildAssistantAppendix(retrievalResult);
     } catch (error) {
       console.error("ai-chat: failed to retrieve documentation context", error);
       finalMessages.push({
@@ -322,7 +425,10 @@ async function buildAugmentedMessages(messages) {
     }
   }
 
-  return finalMessages.concat(messages);
+  return {
+    messages: finalMessages.concat(messages),
+    assistantAppendix,
+  };
 }
 
 function sendSafe(sender, channel, payload) {
@@ -353,7 +459,7 @@ function parseSseChunk(rawChunk, onData) {
   }
 }
 
-async function handleStream({ sender, requestId, apiKey, model, messages }) {
+async function handleStream({ sender, requestId, apiKey, model, messages, assistantAppendix = "" }) {
   const controller = new AbortController();
   activeRequests.set(requestId, controller);
 
@@ -467,6 +573,10 @@ async function handleStream({ sender, requestId, apiKey, model, messages }) {
       });
     }
 
+    if (assistantAppendix) {
+      sendSafe(sender, "ai-chat/chunk", { requestId, delta: assistantAppendix });
+    }
+
     sendSafe(sender, "ai-chat/done", { requestId });
   } catch (error) {
     if (controller.signal.aborted) {
@@ -548,13 +658,14 @@ function setup() {
 
     void (async () => {
       try {
-        const augmentedMessages = await buildAugmentedMessages(messages);
+        const { messages: augmentedMessages, assistantAppendix } = await buildAugmentedMessages(messages);
         await handleStream({
           sender: event.sender,
           requestId,
           apiKey,
           model,
           messages: augmentedMessages,
+          assistantAppendix,
         });
       } catch (error) {
         console.error("ai-chat: stream handling failed", error);

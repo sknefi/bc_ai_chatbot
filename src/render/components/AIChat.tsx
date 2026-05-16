@@ -40,6 +40,7 @@ function MarkdownMessage({ content }: { content: string }) {
             <a
               {...props}
               href={href}
+              className="text-hardwario-primary underline decoration-transparent underline-offset-2 transition-colors hover:decoration-current"
               onClick={(event) => {
                 event.preventDefault();
                 if (href) {
@@ -132,6 +133,8 @@ function formatConversationDate(value: string): string {
   }
 }
 
+const DEFAULT_RETRIEVAL_TOP_K = '6';
+
 export default function AIChat() {
   const [openOptionSections, setOpenOptionSections] = useState({
     docs: true,
@@ -201,7 +204,7 @@ export default function AIChat() {
     hasEmbeddings: false,
   });
   const [retrievalQuery, setRetrievalQuery] = useState('');
-  const [retrievalTopK, setRetrievalTopK] = useState('5');
+  const [retrievalTopK, setRetrievalTopK] = useState(DEFAULT_RETRIEVAL_TOP_K);
   const [retrievalResult, setRetrievalResult] = useState<DocsRetrievalResponse | null>(null);
   const [retrievalError, setRetrievalError] = useState('');
   const [isRetrieving, setIsRetrieving] = useState(false);
@@ -562,7 +565,7 @@ export default function AIChat() {
     try {
       const result = await window.electronAPI.docsRetrieval.retrieveChunks({
         query,
-        topK: Number(retrievalTopK) || 5,
+        topK: Number(retrievalTopK) || Number(DEFAULT_RETRIEVAL_TOP_K),
       });
       setRetrievalResult(result);
     } catch (error) {
