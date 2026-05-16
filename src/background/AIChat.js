@@ -40,6 +40,9 @@ const CHAT_SYSTEM_PROMPT = [
   "If the user wants to buy hardware, wants a product recommendation, or asks which HARDWARIO module they should start with, and the retrieved context identifies a relevant HARDWARIO product, recommend the relevant HARDWARIO product and provide the retrieved store link directly when available.",
   "When you mention a specific HARDWARIO product or module and a retrieved store URL is available for it, write the product or module name as a clickable markdown link to that store URL.",
   "When exact URLs are provided in the retrieved context, use only those exact URLs. Never invent, guess, rewrite, or normalize HARDWARIO store URLs or other resource URLs.",
+  "Treat the 'Available links' list in the retrieved context as the authoritative set of URLs for the current answer.",
+  "If an 'Available links' list is provided in the retrieved context, use only links from that list when you include URLs in the answer.",
+  "If no suitable link exists in the 'Available links' list, do not output a URL.",
   "Do not invent store URLs for generic categories, broad product groups, or ambiguous product mentions.",
   "If you mention links for more than one product or module, group the links under the corresponding product or module name.",
   "Never output an unlabeled flat list of links. If you mention more than one product, every store link or resource link must clearly say which product or module it belongs to.",
@@ -272,38 +275,6 @@ function selectRetrievedGroups(results) {
   return { grouped, selected };
 }
 
-function hasLinkIntent(text) {
-  const normalized = String(text || "").toLowerCase();
-  return /\blink\b|\blinks\b|\bsource\b|\bsources\b|\bdocumentation\b|\bdocs\b|\breference\b|\breferences\b|\bmore info\b/.test(normalized);
-}
-
-function hasPurchaseIntent(text) {
-  const normalized = String(text || "").toLowerCase();
-  return /\bbuy\b|\bpurchase\b|\bstore\b|\bshop\b|\border\b|where can i get|where can i buy|where to buy/.test(normalized);
-}
-
-function getAppendixItems(results, userQuestion) {
-  const { grouped, selected } = selectRetrievedGroups(results);
-  const purchaseIntent = hasPurchaseIntent(userQuestion);
-  const linkIntent = hasLinkIntent(userQuestion);
-
-  if (linkIntent) {
-    return selected.flatMap((group) => group.items);
-  }
-
-  if (purchaseIntent) {
-    if (grouped.high.length > 0) {
-      return grouped.high;
-    }
-
-    if (grouped.medium.length > 0) {
-      return grouped.medium;
-    }
-  }
-
-  return [];
-}
-
 function describeLinkDestination(url) {
   const normalized = String(url || "").toLowerCase();
 
@@ -335,15 +306,7 @@ function formatAppendixLinkLabel(link) {
   return `${baseLabel} (${describeLinkDestination(link.url)})`;
 }
 
-function formatVisibleUrl(url) {
-  return String(url || "")
-    .replace(/^https?:\/\//i, "")
-    .replace(/\/$/, "");
-}
-
-function formatRetrievedChunk(result, index, options = {}) {
-  const includeLinks = Boolean(options.includeLinks);
-  const purchaseIntent = Boolean(options.purchaseIntent);
+function formatRetrievedChunk(result, index) {
   const lines = [
     `${index}. Path: ${result.path}`,
     `   Heading: ${result.heading}`,
@@ -351,25 +314,39 @@ function formatRetrievedChunk(result, index, options = {}) {
     `   Text: ${result.text}`,
   ];
 
-  if (includeLinks && Array.isArray(result.relatedLinks) && result.relatedLinks.length > 0) {
-    const exactLinks = result.relatedLinks
-      .filter((link) => !purchaseIntent || link?.kind === "store")
-      .slice(0, purchaseIntent ? 2 : 5)
-      .map((link) => `${cleanupInlineMarkdown(link.label || link.kind || "Link")} (${describeLinkDestination(link.url)}): ${link.url}`);
-
-    if (exactLinks.length > 0) {
-      lines.push(`   Exact links: ${exactLinks.join(" | ")}`);
-    }
-  }
-
   return lines.join("\n");
 }
 
-function buildRetrievalContext(query, retrievalResult, userQuestion) {
+function buildAvailableLinks(results) {
+  const { selected } = selectRetrievedGroups(results);
+  const selectedItems = selected.flatMap((group) => group.items);
+  const linksByUrl = new Map();
+
+  for (const item of selectedItems) {
+    const title = item.title || item.heading || item.path;
+    for (const link of item.relatedLinks || []) {
+      if (!link?.url) {
+        continue;
+      }
+
+      if (!linksByUrl.has(link.url)) {
+        linksByUrl.set(link.url, {
+          title,
+          label: cleanupInlineMarkdown(link.label || link.kind || "Link"),
+          destination: describeLinkDestination(link.url),
+          url: link.url,
+        });
+      }
+    }
+  }
+
+  return Array.from(linksByUrl.values());
+}
+
+function buildRetrievalContext(query, retrievalResult) {
   const results = Array.isArray(retrievalResult?.results) ? retrievalResult.results : [];
   const { grouped, selected } = selectRetrievedGroups(results);
-  const purchaseIntent = hasPurchaseIntent(userQuestion);
-  const linkIntent = hasLinkIntent(userQuestion);
+  const availableLinks = buildAvailableLinks(results);
 
   if (selected.length === 0) {
     return "";
@@ -391,11 +368,16 @@ function buildRetrievalContext(query, retrievalResult, userQuestion) {
     lines.push("");
     lines.push(`${group.label}:`);
     for (const item of group.items) {
-      lines.push(formatRetrievedChunk(item, resultIndex, {
-        includeLinks: purchaseIntent || linkIntent,
-        purchaseIntent,
-      }));
+      lines.push(formatRetrievedChunk(item, resultIndex));
       resultIndex += 1;
+    }
+  }
+
+  if (availableLinks.length > 0) {
+    lines.push("");
+    lines.push("Available links:");
+    for (const link of availableLinks) {
+      lines.push(`- ${link.title} | ${link.label} (${link.destination}) | ${link.url}`);
     }
   }
 
@@ -416,89 +398,6 @@ function buildRetrievalQuery(messages) {
   }
 
   return lines.join("\n");
-}
-
-function buildAssistantAppendix(userQuestion, retrievalResult) {
-  const results = Array.isArray(retrievalResult?.results) ? retrievalResult.results : [];
-  const selectedItems = getAppendixItems(results, userQuestion);
-  const purchaseIntent = hasPurchaseIntent(userQuestion);
-  const linkIntent = hasLinkIntent(userQuestion);
-
-  if (selectedItems.length === 0 || (!purchaseIntent && !linkIntent)) {
-    return "";
-  }
-
-  const sources = [];
-  const sourceKeys = new Set();
-  for (const item of selectedItems) {
-    const key = `${item.path}::${item.heading}`;
-    if (sourceKeys.has(key)) {
-      continue;
-    }
-
-    sourceKeys.add(key);
-    sources.push({
-      label: `${item.path} / ${item.heading}`,
-      url: item.githubBlobUrl || "",
-    });
-  }
-
-  const linksByTitle = new Map();
-  for (const item of selectedItems) {
-    const title = item.title || item.heading || item.path;
-    if (!linksByTitle.has(title)) {
-      linksByTitle.set(title, []);
-    }
-
-    const titleLinks = linksByTitle.get(title);
-    for (const link of item.relatedLinks || []) {
-      if (purchaseIntent && link?.kind !== "store") {
-        continue;
-      }
-
-      if (!link?.url) {
-        continue;
-      }
-
-      if (titleLinks.some((existing) => existing.url === link.url)) {
-        continue;
-      }
-
-      titleLinks.push({
-        label: formatAppendixLinkLabel(link),
-        url: link.url,
-      });
-    }
-  }
-
-  const lines = [];
-  if (!purchaseIntent && sources.length > 0) {
-    lines.push("Sources:");
-    for (const source of sources) {
-      lines.push(source.url ? `- [${source.label}](${source.url})` : `- ${source.label}`);
-    }
-  }
-
-  const titledLinkGroups = Array.from(linksByTitle.entries())
-    .map(([title, links]) => ({ title, links }))
-    .filter((group) => group.links.length > 0);
-
-  if (titledLinkGroups.length > 0) {
-    if (lines.length > 0) {
-      lines.push("");
-    }
-    lines.push("Useful links:");
-
-    for (const group of titledLinkGroups) {
-      lines.push("");
-      lines.push(`### ${group.title}`);
-      for (const link of group.links) {
-        lines.push(`- ${link.label} -> [${formatVisibleUrl(link.url)}](${link.url})`);
-      }
-    }
-  }
-
-  return lines.length > 0 ? `\n\n${lines.join("\n")}` : "";
 }
 
 function buildRelatedLinkGroups(retrievalResult) {
@@ -555,7 +454,7 @@ async function buildAugmentedMessages(messages) {
         topK: RETRIEVAL_TOP_K,
       });
 
-      const retrievalContext = buildRetrievalContext(retrievalQuery, retrievalResult, latestUserMessage.content);
+      const retrievalContext = buildRetrievalContext(retrievalQuery, retrievalResult);
       if (retrievalContext) {
         finalMessages.push({
           role: "system",
