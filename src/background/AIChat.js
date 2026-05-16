@@ -10,6 +10,7 @@ const SELECTED_MODEL_KEY = "openrouter.model";
 
 const MODEL_OPTIONS = [
   { id: "openai/gpt-4.1-mini", label: "OpenAI GPT-4.1 Mini", free: false },
+  { id: "anthropic/claude-sonnet-4.5", label: "Anthropic Claude Sonnet 4.5", free: false },
   { id: "google/gemma-3-27b-it:free", label: "Google Gemma 3 27B (Free)", free: true },
   { id: "meta-llama/llama-3.3-70b-instruct:free", label: "Meta Llama 3.3 70B (Free)", free: true },
   { id: "deepseek/deepseek-chat-v3-0324:free", label: "DeepSeek Chat V3 (Free)", free: true },
