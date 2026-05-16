@@ -23,16 +23,31 @@ const MEDIUM_RELEVANCE_THRESHOLD = 0.60;
 const LOW_RELEVANCE_THRESHOLD = 0.45;
 const LOW_RELEVANCE_FALLBACK_LIMIT = 3;
 const CHAT_SYSTEM_PROMPT = [
-  "You are assisting with HARDWARIO documentation questions inside HARDWARIO Playground.",
-  "When retrieved documentation context is provided, use it as the primary source for HARDWARIO-specific technical claims.",
+  "You are an AI assistant inside HARDWARIO Playground focused on HARDWARIO hardware, firmware, Node-RED, and related application guidance.",
+  "When retrieved documentation context is provided, use it as the primary source for HARDWARIO-specific claims and recommendations.",
   "Prefer higher-relevance retrieved chunks over lower-relevance chunks.",
-  "If the retrieved context is insufficient, ambiguous, or low-relevance, say that clearly instead of inventing details.",
-  "Do not answer HARDWARIO-specific hardware, firmware, connectors, wiring, APIs, or Node-RED questions from generic world knowledge when the retrieved documentation does not support the claim.",
-  "If the user asks a follow-up question that depends on previous HARDWARIO context, use the retrieved context and the recent user conversation context together, and ask for clarification if the product or module is still ambiguous.",
-  "If the user wants to buy hardware and the retrieved context identifies a relevant HARDWARIO product, recommend the HARDWARIO product and use the retrieved store link when available.",
-  "Do not invent HARDWARIO product behavior, APIs, firmware details, wiring steps, or Node-RED behavior that are not supported by the retrieved context.",
+  "If the retrieved context is insufficient, ambiguous, or weak, do not invent details.",
+  "For general conceptual questions that are not specifically about HARDWARIO products or documentation, you may answer from general knowledge.",
+  "Do not answer HARDWARIO-specific hardware, firmware, connectors, wiring, APIs, product capabilities, or Node-RED questions from generic world knowledge when the retrieved documentation does not support the claim.",
+  "For broad beginner questions that are not clearly asking for a specific HARDWARIO product or documented detail, you may give general practical guidance in a clear and helpful way.",
+  "Default to a beginner-friendly explanation, but remain technically correct and professional.",
+  "For beginners, define uncommon terms briefly and keep explanations clear and concrete.",
+  "For advanced users, stay concise and precise, include relevant constraints and caveats, and do not over-explain basics.",
+  "Start with the direct answer. Then add a short explanation. Add practical next steps or examples only when they help.",
+  "Do not mention retrieval, embeddings, top-k, similarity scores, or documentation-context internals to the user unless the user explicitly asks about them.",
+  "If HARDWARIO-specific support is weak, either ask a short clarifying question or give a clearly labeled general answer without pretending it is confirmed by HARDWARIO documentation.",
+  "If the user asks a follow-up question that depends on earlier HARDWARIO context, use the retrieved context and recent user conversation context together. Ask for clarification only when the product or intent is still genuinely ambiguous.",
+  "If the user wants to buy hardware, wants a product recommendation, or asks which HARDWARIO module they should start with, and the retrieved context identifies a relevant HARDWARIO product, recommend the relevant HARDWARIO product and provide the retrieved store link directly when available.",
+  "When you mention a specific HARDWARIO product or module and a retrieved store URL is available for it, write the product or module name as a clickable markdown link to that store URL.",
+  "When exact URLs are provided in the retrieved context, use only those exact URLs. Never invent, guess, rewrite, or normalize HARDWARIO store URLs or other resource URLs.",
+  "Do not invent store URLs for generic categories, broad product groups, or ambiguous product mentions.",
+  "If you mention links for more than one product or module, group the links under the corresponding product or module name.",
+  "Never output an unlabeled flat list of links. If you mention more than one product, every store link or resource link must clearly say which product or module it belongs to.",
+  "If you mention more than one store link, write them in a form like 'Temperature Tag store: ...' and 'Climate Module store: ...'.",
+  "When you mention a link, make the destination clear in the visible text so the user knows where the link leads.",
+  "Do not generate your own sections titled Sources, Useful links, or References unless the user explicitly asks for them. The application may render structured sources and links separately.",
   "When relevant, cite the source path and section heading you used.",
-  "Use useful links only when they are relevant to the answer and come from the retrieved context.",
+  "Use useful links only when they help answer the question or when the user asks for them, and always state which HARDWARIO product or module each link belongs to.",
   "For simple greetings or general conversational messages that do not depend on documentation, you can answer normally.",
 ].join("\n");
 
@@ -257,7 +272,78 @@ function selectRetrievedGroups(results) {
   return { grouped, selected };
 }
 
-function formatRetrievedChunk(result, index) {
+function hasLinkIntent(text) {
+  const normalized = String(text || "").toLowerCase();
+  return /\blink\b|\blinks\b|\bsource\b|\bsources\b|\bdocumentation\b|\bdocs\b|\breference\b|\breferences\b|\bmore info\b/.test(normalized);
+}
+
+function hasPurchaseIntent(text) {
+  const normalized = String(text || "").toLowerCase();
+  return /\bbuy\b|\bpurchase\b|\bstore\b|\bshop\b|\border\b|where can i get|where can i buy|where to buy/.test(normalized);
+}
+
+function getAppendixItems(results, userQuestion) {
+  const { grouped, selected } = selectRetrievedGroups(results);
+  const purchaseIntent = hasPurchaseIntent(userQuestion);
+  const linkIntent = hasLinkIntent(userQuestion);
+
+  if (linkIntent) {
+    return selected.flatMap((group) => group.items);
+  }
+
+  if (purchaseIntent) {
+    if (grouped.high.length > 0) {
+      return grouped.high;
+    }
+
+    if (grouped.medium.length > 0) {
+      return grouped.medium;
+    }
+  }
+
+  return [];
+}
+
+function describeLinkDestination(url) {
+  const normalized = String(url || "").toLowerCase();
+
+  if (normalized.includes("hardwario.store")) {
+    return "HARDWARIO Store";
+  }
+
+  if (normalized.includes("sdk.hardwario.com")) {
+    return "HARDWARIO SDK";
+  }
+
+  if (normalized.includes("github.com")) {
+    return "GitHub";
+  }
+
+  if (normalized.includes("hackster.io")) {
+    return "Hackster";
+  }
+
+  if (normalized.includes("docs.hardwario.com")) {
+    return "HARDWARIO Docs";
+  }
+
+  return "External Link";
+}
+
+function formatAppendixLinkLabel(link) {
+  const baseLabel = cleanupInlineMarkdown(link.label || link.kind || "Link");
+  return `${baseLabel} (${describeLinkDestination(link.url)})`;
+}
+
+function formatVisibleUrl(url) {
+  return String(url || "")
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/$/, "");
+}
+
+function formatRetrievedChunk(result, index, options = {}) {
+  const includeLinks = Boolean(options.includeLinks);
+  const purchaseIntent = Boolean(options.purchaseIntent);
   const lines = [
     `${index}. Path: ${result.path}`,
     `   Heading: ${result.heading}`,
@@ -265,41 +351,39 @@ function formatRetrievedChunk(result, index) {
     `   Text: ${result.text}`,
   ];
 
-  if (Array.isArray(result.relatedLinks) && result.relatedLinks.length > 0) {
-    const links = result.relatedLinks
-      .slice(0, 4)
-      .map((link) => `${cleanupInlineMarkdown(link.label || link.kind || "Link")}: ${link.url}`)
-      .join(" | ");
+  if (includeLinks && Array.isArray(result.relatedLinks) && result.relatedLinks.length > 0) {
+    const exactLinks = result.relatedLinks
+      .filter((link) => !purchaseIntent || link?.kind === "store")
+      .slice(0, purchaseIntent ? 2 : 5)
+      .map((link) => `${cleanupInlineMarkdown(link.label || link.kind || "Link")} (${describeLinkDestination(link.url)}): ${link.url}`);
 
-    if (links) {
-      lines.push(`   Useful links: ${links}`);
+    if (exactLinks.length > 0) {
+      lines.push(`   Exact links: ${exactLinks.join(" | ")}`);
     }
   }
 
   return lines.join("\n");
 }
 
-function buildRetrievalContext(query, retrievalResult) {
+function buildRetrievalContext(query, retrievalResult, userQuestion) {
   const results = Array.isArray(retrievalResult?.results) ? retrievalResult.results : [];
   const { grouped, selected } = selectRetrievedGroups(results);
+  const purchaseIntent = hasPurchaseIntent(userQuestion);
+  const linkIntent = hasLinkIntent(userQuestion);
 
   if (selected.length === 0) {
-    return [
-      "Retrieved documentation context for the current user question:",
-      `Question: ${query}`,
-      "No sufficiently relevant documentation chunks were retrieved.",
-      "If the question requires HARDWARIO-specific documentation, say that the retrieved documentation context is insufficient.",
-    ].join("\n");
+    return "";
   }
 
   const lines = [
     "Retrieved documentation context for the current user question:",
     `Question: ${query}`,
     `Embedding model: ${retrievalResult.embeddingModel}`,
+    "Use High relevance chunks as primary evidence. Use Medium relevance chunks as supporting evidence. Use Low relevance chunks cautiously.",
   ];
 
   if (grouped.high.length === 0 && grouped.medium.length === 0 && grouped.low.length > 0) {
-    lines.push("Only low-relevance chunks were retrieved. Answer cautiously and say when documentation support is weak.");
+    lines.push("Only low-confidence supporting chunks were retrieved. Answer cautiously and avoid unsupported HARDWARIO-specific claims.");
   }
 
   let resultIndex = 1;
@@ -307,7 +391,10 @@ function buildRetrievalContext(query, retrievalResult) {
     lines.push("");
     lines.push(`${group.label}:`);
     for (const item of group.items) {
-      lines.push(formatRetrievedChunk(item, resultIndex));
+      lines.push(formatRetrievedChunk(item, resultIndex, {
+        includeLinks: purchaseIntent || linkIntent,
+        purchaseIntent,
+      }));
       resultIndex += 1;
     }
   }
@@ -331,12 +418,13 @@ function buildRetrievalQuery(messages) {
   return lines.join("\n");
 }
 
-function buildAssistantAppendix(retrievalResult) {
+function buildAssistantAppendix(userQuestion, retrievalResult) {
   const results = Array.isArray(retrievalResult?.results) ? retrievalResult.results : [];
-  const { selected } = selectRetrievedGroups(results);
-  const selectedItems = selected.flatMap((group) => group.items);
+  const selectedItems = getAppendixItems(results, userQuestion);
+  const purchaseIntent = hasPurchaseIntent(userQuestion);
+  const linkIntent = hasLinkIntent(userQuestion);
 
-  if (selectedItems.length === 0) {
+  if (selectedItems.length === 0 || (!purchaseIntent && !linkIntent)) {
     return "";
   }
 
@@ -355,41 +443,100 @@ function buildAssistantAppendix(retrievalResult) {
     });
   }
 
-  const links = [];
-  const linkUrls = new Set();
+  const linksByTitle = new Map();
   for (const item of selectedItems) {
+    const title = item.title || item.heading || item.path;
+    if (!linksByTitle.has(title)) {
+      linksByTitle.set(title, []);
+    }
+
+    const titleLinks = linksByTitle.get(title);
     for (const link of item.relatedLinks || []) {
-      if (!link?.url || linkUrls.has(link.url)) {
+      if (purchaseIntent && link?.kind !== "store") {
         continue;
       }
 
-      linkUrls.add(link.url);
-      links.push({
-        label: cleanupInlineMarkdown(link.label || link.kind || "Link"),
+      if (!link?.url) {
+        continue;
+      }
+
+      if (titleLinks.some((existing) => existing.url === link.url)) {
+        continue;
+      }
+
+      titleLinks.push({
+        label: formatAppendixLinkLabel(link),
         url: link.url,
       });
     }
   }
 
   const lines = [];
-  if (sources.length > 0) {
+  if (!purchaseIntent && sources.length > 0) {
     lines.push("Sources:");
     for (const source of sources) {
       lines.push(source.url ? `- [${source.label}](${source.url})` : `- ${source.label}`);
     }
   }
 
-  if (links.length > 0) {
+  const titledLinkGroups = Array.from(linksByTitle.entries())
+    .map(([title, links]) => ({ title, links }))
+    .filter((group) => group.links.length > 0);
+
+  if (titledLinkGroups.length > 0) {
     if (lines.length > 0) {
       lines.push("");
     }
     lines.push("Useful links:");
-    for (const link of links) {
-      lines.push(`- [${link.label}](${link.url})`);
+
+    for (const group of titledLinkGroups) {
+      lines.push("");
+      lines.push(`### ${group.title}`);
+      for (const link of group.links) {
+        lines.push(`- ${link.label} -> [${formatVisibleUrl(link.url)}](${link.url})`);
+      }
     }
   }
 
   return lines.length > 0 ? `\n\n${lines.join("\n")}` : "";
+}
+
+function buildRelatedLinkGroups(retrievalResult) {
+  const results = Array.isArray(retrievalResult?.results) ? retrievalResult.results : [];
+  const { selected } = selectRetrievedGroups(results);
+  const selectedItems = selected.flatMap((group) => group.items);
+
+  if (selectedItems.length === 0) {
+    return [];
+  }
+
+  const linksByTitle = new Map();
+  for (const item of selectedItems) {
+    const title = item.title || item.heading || item.path;
+    if (!linksByTitle.has(title)) {
+      linksByTitle.set(title, []);
+    }
+
+    const titleLinks = linksByTitle.get(title);
+    for (const link of item.relatedLinks || []) {
+      if (!link?.url) {
+        continue;
+      }
+
+      if (titleLinks.some((existing) => existing.url === link.url)) {
+        continue;
+      }
+
+      titleLinks.push({
+        label: formatAppendixLinkLabel(link),
+        url: link.url,
+      });
+    }
+  }
+
+  return Array.from(linksByTitle.entries())
+    .map(([title, links]) => ({ title, links }))
+    .filter((group) => group.links.length > 0);
 }
 
 async function buildAugmentedMessages(messages) {
@@ -398,7 +545,7 @@ async function buildAugmentedMessages(messages) {
   const finalMessages = [
     { role: "system", content: CHAT_SYSTEM_PROMPT },
   ];
-  let assistantAppendix = "";
+  let relatedLinkGroups = [];
 
   if (latestUserMessage?.content && retrievalQuery) {
     try {
@@ -408,26 +555,26 @@ async function buildAugmentedMessages(messages) {
         topK: RETRIEVAL_TOP_K,
       });
 
-      finalMessages.push({
-        role: "system",
-        content: buildRetrievalContext(retrievalQuery, retrievalResult),
-      });
-      assistantAppendix = buildAssistantAppendix(retrievalResult);
+      const retrievalContext = buildRetrievalContext(retrievalQuery, retrievalResult, latestUserMessage.content);
+      if (retrievalContext) {
+        finalMessages.push({
+          role: "system",
+          content: retrievalContext,
+        });
+      }
+      relatedLinkGroups = buildRelatedLinkGroups(retrievalResult);
     } catch (error) {
       console.error("ai-chat: failed to retrieve documentation context", error);
       finalMessages.push({
         role: "system",
-        content: [
-          "Retrieved documentation context for the current user question is unavailable.",
-          "If the answer depends on HARDWARIO-specific documentation, say that the documentation context is unavailable or insufficient.",
-        ].join("\n"),
+        content: "Documentation support for this answer is currently unavailable. Do not mention retrieval internals. If the question is HARDWARIO-specific, avoid unsupported claims; otherwise give a general helpful answer.",
       });
     }
   }
 
   return {
     messages: finalMessages.concat(messages),
-    assistantAppendix,
+    relatedLinkGroups,
   };
 }
 
@@ -459,7 +606,7 @@ function parseSseChunk(rawChunk, onData) {
   }
 }
 
-async function handleStream({ sender, requestId, apiKey, model, messages, assistantAppendix = "" }) {
+async function handleStream({ sender, requestId, apiKey, model, messages, relatedLinkGroups = [] }) {
   const controller = new AbortController();
   activeRequests.set(requestId, controller);
 
@@ -573,8 +720,8 @@ async function handleStream({ sender, requestId, apiKey, model, messages, assist
       });
     }
 
-    if (assistantAppendix) {
-      sendSafe(sender, "ai-chat/chunk", { requestId, delta: assistantAppendix });
+    if (Array.isArray(relatedLinkGroups) && relatedLinkGroups.length > 0) {
+      sendSafe(sender, "ai-chat/related-links", { requestId, groups: relatedLinkGroups });
     }
 
     sendSafe(sender, "ai-chat/done", { requestId });
@@ -658,14 +805,14 @@ function setup() {
 
     void (async () => {
       try {
-        const { messages: augmentedMessages, assistantAppendix } = await buildAugmentedMessages(messages);
+        const { messages: augmentedMessages, relatedLinkGroups } = await buildAugmentedMessages(messages);
         await handleStream({
           sender: event.sender,
           requestId,
           apiKey,
           model,
           messages: augmentedMessages,
-          assistantAppendix,
+          relatedLinkGroups,
         });
       } catch (error) {
         console.error("ai-chat: stream handling failed", error);

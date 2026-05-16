@@ -88,6 +88,21 @@ export interface AIChatDonePayload {
   requestId: string;
 }
 
+export interface AIChatRelatedLink {
+  label: string;
+  url: string;
+}
+
+export interface AIChatRelatedLinkGroup {
+  title: string;
+  links: AIChatRelatedLink[];
+}
+
+export interface AIChatRelatedLinksPayload {
+  requestId: string;
+  groups: AIChatRelatedLinkGroup[];
+}
+
 export interface AIChatErrorPayload {
   requestId: string;
   error: string;
@@ -259,6 +274,7 @@ export interface ElectronAPI {
     send: (payload: AIChatSendPayload) => void;
     cancel: (requestId: string) => void;
     onChunk: (callback: (payload: AIChatChunkPayload) => void) => () => void;
+    onRelatedLinks: (callback: (payload: AIChatRelatedLinksPayload) => void) => () => void;
     onDone: (callback: (payload: AIChatDonePayload) => void) => () => void;
     onError: (callback: (payload: AIChatErrorPayload) => void) => () => void;
     onCancelled: (callback: (payload: AIChatDonePayload) => void) => () => void;
@@ -398,6 +414,8 @@ const electronAPI: ElectronAPI = {
     cancel: (requestId: string) => ipcRenderer.send('ai-chat/cancel', requestId),
     onChunk: (callback: (payload: AIChatChunkPayload) => void) =>
       createListener('ai-chat/chunk', callback),
+    onRelatedLinks: (callback: (payload: AIChatRelatedLinksPayload) => void) =>
+      createListener('ai-chat/related-links', callback),
     onDone: (callback: (payload: AIChatDonePayload) => void) =>
       createListener('ai-chat/done', callback),
     onError: (callback: (payload: AIChatErrorPayload) => void) =>

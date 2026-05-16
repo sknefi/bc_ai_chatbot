@@ -4,6 +4,8 @@ import { FiChevronDown, FiChevronRight, FiDownload, FiKey, FiMessageSquare, FiPl
 import remarkGfm from 'remark-gfm';
 import type {
   AIChatConversation,
+  AIChatRelatedLinkGroup,
+  AIChatRelatedLinksPayload,
   AIChatStoredMessage,
   DocsChunkingStatus,
   DocsEmbeddingsStatus,
@@ -16,6 +18,7 @@ interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   createdAt: string;
+  relatedLinkGroups?: AIChatRelatedLinkGroup[];
 }
 
 function makeId(prefix: string): string {
@@ -36,21 +39,27 @@ function MarkdownMessage({ content }: { content: string }) {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          a: ({ href, children, ...props }) => (
-            <a
-              {...props}
-              href={href}
-              className="text-hardwario-primary underline decoration-transparent underline-offset-2 transition-colors hover:decoration-current"
-              onClick={(event) => {
-                event.preventDefault();
-                if (href) {
-                  void window.electronAPI.shell.openExternal(href);
-                }
-              }}
-            >
-              {children}
-            </a>
-          ),
+          a: ({ href, children, ...props }) => {
+            const isStoreLink = typeof href === 'string' && href.includes('hardwario.store');
+
+            return (
+              <a
+                {...props}
+                href={href}
+                className={isStoreLink
+                  ? 'inline-flex items-center rounded-md border border-hardwario-primary/20 bg-blue-50 px-2 py-0.5 font-medium text-hardwario-primary no-underline transition-colors hover:border-hardwario-primary/35 hover:bg-blue-100'
+                  : 'text-hardwario-primary underline decoration-transparent underline-offset-2 transition-colors hover:decoration-current'}
+                onClick={(event) => {
+                  event.preventDefault();
+                  if (href) {
+                    void window.electronAPI.shell.openExternal(href);
+                  }
+                }}
+              >
+                {children}
+              </a>
+            );
+          },
           blockquote: ({ children, ...props }) => (
             <blockquote {...props} className="border-l-2 border-gray-300 pl-3 text-gray-700 italic">
               {children}
@@ -208,6 +217,7 @@ export default function AIChat() {
   const [retrievalResult, setRetrievalResult] = useState<DocsRetrievalResponse | null>(null);
   const [retrievalError, setRetrievalError] = useState('');
   const [isRetrieving, setIsRetrieving] = useState(false);
+  const [openRelatedLinksByMessageId, setOpenRelatedLinksByMessageId] = useState<Record<string, boolean>>({});
 
   const currentRequestIdRef = useRef<string | null>(null);
   const currentAssistantIdRef = useRef<string | null>(null);
@@ -228,6 +238,13 @@ export default function AIChat() {
     setOpenOptionSections((prev) => ({
       ...prev,
       [section]: !prev[section],
+    }));
+  };
+
+  const toggleRelatedLinks = (messageId: string) => {
+    setOpenRelatedLinksByMessageId((prev) => ({
+      ...prev,
+      [messageId]: !prev[messageId],
     }));
   };
 
@@ -364,6 +381,25 @@ export default function AIChat() {
       );
     });
 
+    const unsubRelatedLinks = window.electronAPI.aiChat.onRelatedLinks((payload: AIChatRelatedLinksPayload) => {
+      if (payload.requestId !== currentRequestIdRef.current) {
+        return;
+      }
+
+      const assistantId = currentAssistantIdRef.current;
+      if (!assistantId) {
+        return;
+      }
+
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === assistantId
+            ? { ...message, relatedLinkGroups: payload.groups }
+            : message
+        )
+      );
+    });
+
     const finalizeStreamingState = (nextStatusText: string, nextErrorText = '') => {
       setIsSending(false);
       setStatusText(nextStatusText);
@@ -416,6 +452,7 @@ export default function AIChat() {
 
     return () => {
       unsubChunk();
+      unsubRelatedLinks();
       unsubDone();
       unsubCancelled();
       unsubError();
@@ -1018,6 +1055,45 @@ export default function AIChat() {
                   {message.role === 'assistant'
                     ? <MarkdownMessage content={message.content || (isSending ? '...' : '')} />
                     : <div className="whitespace-pre-wrap">{message.content}</div>}
+                  {message.role === 'assistant' && message.relatedLinkGroups && message.relatedLinkGroups.length > 0 ? (
+                    <div className="mt-3 border-t border-gray-200 pt-3">
+                      <button
+                        type="button"
+                        onClick={() => toggleRelatedLinks(message.id)}
+                        className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-hardwario-primary transition-colors"
+                      >
+                        {openRelatedLinksByMessageId[message.id] ? (
+                          <FiChevronDown className="w-4 h-4" />
+                        ) : (
+                          <FiChevronRight className="w-4 h-4" />
+                        )}
+                        Related links
+                      </button>
+                      {openRelatedLinksByMessageId[message.id] ? (
+                        <div className="mt-3 space-y-3">
+                          {message.relatedLinkGroups.map((group) => (
+                            <div key={`${message.id}-${group.title}`} className="space-y-2">
+                              <div className="text-sm font-semibold text-gray-900">{group.title}</div>
+                              <div className="space-y-2">
+                                {group.links.map((link) => (
+                                  <button
+                                    key={`${message.id}-${group.title}-${link.url}`}
+                                    type="button"
+                                    onClick={() => void window.electronAPI.shell.openExternal(link.url)}
+                                    className="block w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-left hover:bg-gray-100 transition-colors"
+                                    title={link.url}
+                                  >
+                                    <div className="text-sm font-medium text-hardwario-primary">{link.label}</div>
+                                    <div className="mt-1 font-mono text-[11px] text-gray-500 break-all">{link.url}</div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ))
