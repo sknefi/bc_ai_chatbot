@@ -135,6 +135,19 @@ function MarkdownMessage({ content }: { content: string }) {
   );
 }
 
+function formatPromptDebugTranscript(payload: AIChatPromptDebugPayload): string {
+  return payload.messages
+    .map((message, index) => {
+      return [
+        `# Message ${index + 1}`,
+        `role: ${message.role}`,
+        'content:',
+        message.content,
+      ].join('\n');
+    })
+    .join('\n\n');
+}
+
 function formatConversationDate(value: string): string {
   try {
     return new Date(value).toLocaleString();
@@ -1663,7 +1676,12 @@ export default function AIChat() {
                         </div>
 
                         <div className="rounded border border-gray-200 bg-white p-3">
-                          <div className="mb-2 text-xs font-medium text-gray-800">Last Sent Payload</div>
+                          <div className="mb-2 text-xs font-medium text-gray-800">Exact Messages Sent To AI</div>
+                          <pre className="mb-3 max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded bg-gray-950 p-3 text-[11px] leading-relaxed text-gray-100">
+                            {formatPromptDebugTranscript(promptDebugPayload)}
+                          </pre>
+
+                          <div className="mb-2 text-xs font-medium text-gray-800">Raw Payload JSON</div>
                           <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded bg-gray-950 p-3 text-[11px] leading-relaxed text-gray-100">
                             {JSON.stringify(promptDebugPayload, null, 2)}
                           </pre>

@@ -23,6 +23,8 @@ const HIGH_RELEVANCE_THRESHOLD = 0.75;
 const MEDIUM_RELEVANCE_THRESHOLD = 0.60;
 const LOW_RELEVANCE_THRESHOLD = 0.45;
 const LOW_RELEVANCE_FALLBACK_LIMIT = 3;
+const RELATED_LINKS_FALLBACK_THRESHOLD = 0.20;
+const RELATED_LINKS_FALLBACK_LIMIT = 2;
 const CHAT_SYSTEM_PROMPT = [
   "You are an AI assistant inside HARDWARIO Playground focused on HARDWARIO hardware, firmware, Node-RED, and related application guidance.",
   "When retrieved documentation context is provided, use it as the primary source for HARDWARIO-specific claims and recommendations.",
@@ -41,7 +43,9 @@ const CHAT_SYSTEM_PROMPT = [
   "If the user wants to buy hardware, wants a product recommendation, or asks which HARDWARIO module they should start with, and the retrieved context identifies a relevant HARDWARIO product, recommend the relevant HARDWARIO product and provide the retrieved store link directly when available.",
   "When you mention a specific HARDWARIO product or module and a retrieved store URL is available for it, write the product or module name as a clickable markdown link to that store URL.",
   "When exact URLs are provided in the retrieved context, use only those exact URLs. Never invent, guess, rewrite, or normalize HARDWARIO store URLs or other resource URLs.",
+  "Valid HARDWARIO product store links in this application use the format 'https://www.hardwario.store/p/...'.",
   "Treat the 'Available links' list in the retrieved context as the authoritative set of URLs for the current answer.",
+  "If you mention any link related to the question, you must use only exact links from the 'Available links' list in the retrieved context.",
   "If an 'Available links' list is provided in the retrieved context, use only links from that list when you include URLs in the answer.",
   "If no suitable link exists in the 'Available links' list, do not output a URL.",
   "Do not invent store URLs for generic categories, broad product groups, or ambiguous product mentions.",
@@ -221,6 +225,30 @@ function getRecentUserMessages(messages, limit = 2) {
   return userMessages.reverse();
 }
 
+function getPreviousAssistantMessage(messages) {
+  let seenLatestUser = false;
+
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (!message) {
+      continue;
+    }
+
+    if (!seenLatestUser) {
+      if (message.role === "user") {
+        seenLatestUser = true;
+      }
+      continue;
+    }
+
+    if (message.role === "assistant" && typeof message.content === "string" && message.content.trim().length > 0) {
+      return message;
+    }
+  }
+
+  return null;
+}
+
 function cleanupInlineMarkdown(text) {
   return String(text || "")
     .replace(/\*\*(.*?)\*\*/g, "$1")
@@ -398,13 +426,31 @@ function buildRetrievalQuery(messages) {
     lines.push(`Previous user question: ${recentUserMessages[0].content}`);
   }
 
+  const latestUserWordCount = latestUserMessage.content.trim().split(/\s+/).filter(Boolean).length;
+  if (latestUserWordCount > 0 && latestUserWordCount < 5) {
+    const previousAssistantMessage = getPreviousAssistantMessage(messages);
+    if (previousAssistantMessage?.content) {
+      lines.push(`Previous assistant answer: ${previousAssistantMessage.content}`);
+    }
+  }
+
   return lines.join("\n");
 }
 
 function buildRelatedLinkGroups(retrievalResult) {
   const results = Array.isArray(retrievalResult?.results) ? retrievalResult.results : [];
   const { selected } = selectRetrievedGroups(results);
-  const selectedItems = selected.flatMap((group) => group.items);
+  let selectedItems = selected.flatMap((group) => group.items);
+
+  if (selectedItems.length === 0) {
+    selectedItems = results
+      .filter((item) =>
+        item.score >= RELATED_LINKS_FALLBACK_THRESHOLD &&
+        Array.isArray(item.relatedLinks) &&
+        item.relatedLinks.some((link) => Boolean(link?.url))
+      )
+      .slice(0, RELATED_LINKS_FALLBACK_LIMIT);
+  }
 
   if (selectedItems.length === 0) {
     return [];
