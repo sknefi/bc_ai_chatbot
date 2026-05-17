@@ -103,6 +103,17 @@ export interface AIChatRelatedLinksPayload {
   groups: AIChatRelatedLinkGroup[];
 }
 
+export interface AIChatPromptPreview {
+  model: string;
+  retrievalTopK: number;
+  messages: AIChatMessageInput[];
+  relatedLinkGroups: AIChatRelatedLinkGroup[];
+}
+
+export interface AIChatPromptDebugPayload extends AIChatPromptPreview {
+  requestId: string;
+}
+
 export interface AIChatErrorPayload {
   requestId: string;
   error: string;
@@ -271,8 +282,10 @@ export interface ElectronAPI {
     setApiKey: (apiKey: string) => Promise<{ encrypted: boolean }>;
     clearApiKey: () => Promise<{ ok: boolean }>;
     setModel: (model: string) => Promise<{ ok: boolean; model: string }>;
+    buildPromptPreview: (payload: { model?: string; messages: AIChatMessageInput[] }) => Promise<AIChatPromptPreview>;
     send: (payload: AIChatSendPayload) => void;
     cancel: (requestId: string) => void;
+    onPromptDebug: (callback: (payload: AIChatPromptDebugPayload) => void) => () => void;
     onChunk: (callback: (payload: AIChatChunkPayload) => void) => () => void;
     onRelatedLinks: (callback: (payload: AIChatRelatedLinksPayload) => void) => () => void;
     onDone: (callback: (payload: AIChatDonePayload) => void) => () => void;
@@ -410,8 +423,12 @@ const electronAPI: ElectronAPI = {
     setApiKey: (apiKey: string) => ipcRenderer.invoke('ai-chat/set-api-key', apiKey),
     clearApiKey: () => ipcRenderer.invoke('ai-chat/clear-api-key'),
     setModel: (model: string) => ipcRenderer.invoke('ai-chat/set-model', model),
+    buildPromptPreview: (payload: { model?: string; messages: AIChatMessageInput[] }) =>
+      ipcRenderer.invoke('ai-chat/build-prompt-preview', payload),
     send: (payload: AIChatSendPayload) => ipcRenderer.send('ai-chat/send', payload),
     cancel: (requestId: string) => ipcRenderer.send('ai-chat/cancel', requestId),
+    onPromptDebug: (callback: (payload: AIChatPromptDebugPayload) => void) =>
+      createListener('ai-chat/prompt-debug', callback),
     onChunk: (callback: (payload: AIChatChunkPayload) => void) =>
       createListener('ai-chat/chunk', callback),
     onRelatedLinks: (callback: (payload: AIChatRelatedLinksPayload) => void) =>

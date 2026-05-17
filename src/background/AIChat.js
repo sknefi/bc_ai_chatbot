@@ -668,6 +668,24 @@ function setup() {
     return { ok: true, model };
   });
 
+  ipcMain.handle("ai-chat/build-prompt-preview", async (_event, payload) => {
+    const model = isModelAllowed(payload?.model) ? payload.model : getSelectedModel();
+    const messages = normalizeMessages(payload?.messages);
+
+    if (messages.length === 0) {
+      throw new Error("Message is empty.");
+    }
+
+    const { messages: augmentedMessages, relatedLinkGroups } = await buildAugmentedMessages(messages);
+
+    return {
+      model,
+      retrievalTopK: RETRIEVAL_TOP_K,
+      messages: augmentedMessages,
+      relatedLinkGroups,
+    };
+  });
+
   ipcMain.on("ai-chat/send", (event, payload) => {
     const requestId = typeof payload?.requestId === "string" ? payload.requestId : "";
     if (!requestId) {
@@ -706,6 +724,13 @@ function setup() {
     void (async () => {
       try {
         const { messages: augmentedMessages, relatedLinkGroups } = await buildAugmentedMessages(messages);
+        sendSafe(event.sender, "ai-chat/prompt-debug", {
+          requestId,
+          model,
+          retrievalTopK: RETRIEVAL_TOP_K,
+          messages: augmentedMessages,
+          relatedLinkGroups,
+        });
         await handleStream({
           sender: event.sender,
           requestId,

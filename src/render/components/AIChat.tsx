@@ -4,6 +4,7 @@ import { FiChevronDown, FiChevronRight, FiDownload, FiKey, FiMessageSquare, FiPl
 import remarkGfm from 'remark-gfm';
 import type {
   AIChatConversation,
+  AIChatPromptDebugPayload,
   AIChatRelatedLinkGroup,
   AIChatRelatedLinksPayload,
   AIChatStoredMessage,
@@ -150,6 +151,7 @@ export default function AIChat() {
     chunks: false,
     embeddings: false,
     retrieval: false,
+    promptDebug: false,
   });
   const [conversations, setConversations] = useState<AIChatConversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -217,6 +219,7 @@ export default function AIChat() {
   const [retrievalResult, setRetrievalResult] = useState<DocsRetrievalResponse | null>(null);
   const [retrievalError, setRetrievalError] = useState('');
   const [isRetrieving, setIsRetrieving] = useState(false);
+  const [promptDebugPayload, setPromptDebugPayload] = useState<AIChatPromptDebugPayload | null>(null);
   const [openRelatedLinksByMessageId, setOpenRelatedLinksByMessageId] = useState<Record<string, boolean>>({});
 
   const currentRequestIdRef = useRef<string | null>(null);
@@ -360,6 +363,10 @@ export default function AIChat() {
   }, []);
 
   useEffect(() => {
+    const unsubPromptDebug = window.electronAPI.aiChat.onPromptDebug((payload) => {
+      setPromptDebugPayload(payload);
+    });
+
     const unsubChunk = window.electronAPI.aiChat.onChunk((payload) => {
       if (payload.requestId !== currentRequestIdRef.current) {
         return;
@@ -451,6 +458,7 @@ export default function AIChat() {
     });
 
     return () => {
+      unsubPromptDebug();
       unsubChunk();
       unsubRelatedLinks();
       unsubDone();
@@ -1606,6 +1614,64 @@ export default function AIChat() {
                         </div>
                       </div>
                     ) : null}
+                  </>
+                ) : null}
+              </div>
+
+              <div className="rounded border border-gray-200 bg-gray-50 p-3 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => toggleOptionsSection('promptDebug')}
+                    className="min-w-0 flex-1 text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      {openOptionSections.promptDebug ? (
+                        <FiChevronDown className="w-4 h-4 text-gray-500 shrink-0" />
+                      ) : (
+                        <FiChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
+                      )}
+                      <h3 className="text-sm font-medium text-gray-900">Prompt Debug</h3>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Inspect the exact augmented payload that was sent to the model for the last chat request.
+                    </p>
+                  </button>
+                </div>
+
+                {openOptionSections.promptDebug ? (
+                  <>
+                    {promptDebugPayload ? (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-1 gap-2 text-xs text-gray-600">
+                          <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                            <div className="font-medium text-gray-800">Request ID</div>
+                            <div className="font-mono break-all">{promptDebugPayload.requestId}</div>
+                          </div>
+                          <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                            <div className="font-medium text-gray-800">Model</div>
+                            <div className="font-mono break-all">{promptDebugPayload.model}</div>
+                          </div>
+                          <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                            <div className="font-medium text-gray-800">Retrieval Top K</div>
+                            <div>{promptDebugPayload.retrievalTopK}</div>
+                          </div>
+                          <div className="rounded border border-gray-200 bg-white px-3 py-2">
+                            <div className="font-medium text-gray-800">Message Count</div>
+                            <div>{promptDebugPayload.messages.length}</div>
+                          </div>
+                        </div>
+
+                        <div className="rounded border border-gray-200 bg-white p-3">
+                          <div className="mb-2 text-xs font-medium text-gray-800">Last Sent Payload</div>
+                          <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded bg-gray-950 p-3 text-[11px] leading-relaxed text-gray-100">
+                            {JSON.stringify(promptDebugPayload, null, 2)}
+                          </pre>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-500">Send a chat message first. The exact payload sent to the model will appear here.</p>
+                    )}
                   </>
                 ) : null}
               </div>
