@@ -2,6 +2,7 @@ import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from '
 import ReactMarkdown from 'react-markdown';
 import { FiChevronDown, FiChevronRight, FiDownload, FiKey, FiMessageSquare, FiPlus, FiRefreshCw, FiSend, FiSettings, FiSquare, FiTrash2, FiX } from 'react-icons/fi';
 import remarkGfm from 'remark-gfm';
+import * as i18n from '../../utils/i18n';
 import type {
   AIChatConversation,
   AIChatPromptDebugPayload,
@@ -159,6 +160,7 @@ function formatConversationDate(value: string): string {
 const DEFAULT_RETRIEVAL_TOP_K = '6';
 
 export default function AIChat() {
+  const t = i18n.__;
   const [openOptionSections, setOpenOptionSections] = useState({
     docs: true,
     chunks: false,
@@ -185,7 +187,7 @@ export default function AIChat() {
   const [errorText, setErrorText] = useState<string>('');
   const [docsStatus, setDocsStatus] = useState<DocsIngestStatus>({
     state: 'idle',
-    message: 'Documentation corpus not downloaded yet.',
+    message: i18n.__('Documentation corpus not downloaded yet.'),
     sourceId: 'hardwario-docs',
     targetDir: '',
     manifestPath: '',
@@ -199,7 +201,7 @@ export default function AIChat() {
   });
   const [docsChunkingStatus, setDocsChunkingStatus] = useState<DocsChunkingStatus>({
     state: 'idle',
-    message: 'Chunks not built yet.',
+    message: i18n.__('Chunks not built yet.'),
     sourceId: 'hardwario-docs',
     outputPath: '',
     manifestPath: '',
@@ -214,7 +216,7 @@ export default function AIChat() {
   });
   const [docsEmbeddingsStatus, setDocsEmbeddingsStatus] = useState<DocsEmbeddingsStatus>({
     state: 'idle',
-    message: 'Embeddings not built yet.',
+    message: i18n.__('Embeddings not built yet.'),
     sourceId: 'hardwario-docs',
     outputPath: '',
     manifestPath: '',
@@ -363,7 +365,7 @@ export default function AIChat() {
         setModel(config.model || config.defaultModel);
       })
       .catch((error) => {
-        const message = error instanceof Error ? error.message : 'Failed to load chat configuration.';
+        const message = error instanceof Error ? error.message : t('Failed to load chat configuration.');
         setErrorText(message);
       });
 
@@ -452,7 +454,7 @@ export default function AIChat() {
 
       void persistPromise.finally(() => {
         setMessages((prev) => dropEmptyAssistant(prev, currentAssistantIdRef.current));
-        finalizeStreamingState('Generation cancelled.');
+        finalizeStreamingState(t('Generation cancelled.'));
       });
     });
 
@@ -466,7 +468,7 @@ export default function AIChat() {
 
       void persistPromise.finally(() => {
         setMessages((prev) => dropEmptyAssistant(prev, currentAssistantIdRef.current));
-        finalizeStreamingState('', payload.error || 'Unknown chat error');
+        finalizeStreamingState('', payload.error || t('Unknown chat error'));
       });
     });
 
@@ -524,7 +526,7 @@ export default function AIChat() {
   const saveApiKey = async () => {
     const trimmed = apiKeyInput.trim();
     if (!trimmed) {
-      setErrorText('OpenRouter API key cannot be empty.');
+      setErrorText(t('OpenRouter API key cannot be empty.'));
       return;
     }
 
@@ -533,9 +535,9 @@ export default function AIChat() {
       setHasApiKey(true);
       setApiKeyInput('');
       setErrorText('');
-      setStatusText('API key saved.');
+      setStatusText(t('API key saved.'));
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to save API key.';
+      const message = error instanceof Error ? error.message : t('Failed to save API key.');
       setErrorText(message);
     }
   };
@@ -545,10 +547,10 @@ export default function AIChat() {
       await window.electronAPI.aiChat.clearApiKey();
       setHasApiKey(false);
       setApiKeyInput('');
-      setStatusText('API key removed.');
+      setStatusText(t('API key removed.'));
       setErrorText('');
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to clear API key.';
+      const message = error instanceof Error ? error.message : t('Failed to clear API key.');
       setErrorText(message);
     }
   };
@@ -559,7 +561,7 @@ export default function AIChat() {
       const result = await window.electronAPI.aiChat.setModel(value);
       setModel(result.model);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to save selected model.';
+      const message = error instanceof Error ? error.message : t('Failed to save selected model.');
       setErrorText(message);
     }
   };
@@ -569,7 +571,7 @@ export default function AIChat() {
       const status = await window.electronAPI.docsIngest.downloadHardwareDocs();
       setDocsStatus(status);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to start documentation download.';
+      const message = error instanceof Error ? error.message : t('Failed to start documentation download.');
       setDocsStatus((prev) => ({
         ...prev,
         state: 'error',
@@ -585,7 +587,7 @@ export default function AIChat() {
       setDocsChunkingStatus(status);
       void loadDocsEmbeddingsStatus();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to start chunk build.';
+      const message = error instanceof Error ? error.message : t('Failed to start chunk build.');
       setDocsChunkingStatus((prev) => ({
         ...prev,
         state: 'error',
@@ -600,7 +602,7 @@ export default function AIChat() {
       const status = await window.electronAPI.docsEmbeddings.buildEmbeddings();
       setDocsEmbeddingsStatus(status);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to start embedding build.';
+      const message = error instanceof Error ? error.message : t('Failed to start embedding build.');
       setDocsEmbeddingsStatus((prev) => ({
         ...prev,
         state: 'error',
@@ -613,7 +615,7 @@ export default function AIChat() {
   const handleRetrieveChunks = async () => {
     const query = retrievalQuery.trim();
     if (!query) {
-      setRetrievalError('Retrieval query cannot be empty.');
+      setRetrievalError(t('Retrieval query cannot be empty.'));
       return;
     }
 
@@ -627,7 +629,7 @@ export default function AIChat() {
       });
       setRetrievalResult(result);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to retrieve chunks.';
+      const message = error instanceof Error ? error.message : t('Failed to retrieve chunks.');
       setRetrievalError(message);
       setRetrievalResult(null);
     } finally {
@@ -670,7 +672,7 @@ export default function AIChat() {
   const submitConversationRename = async (conversationId: string) => {
     const trimmedTitle = editingConversationTitle.trim();
     if (!trimmedTitle) {
-      setErrorText('Conversation name cannot be empty.');
+      setErrorText(t('Conversation name cannot be empty.'));
       queueMicrotask(() => {
         conversationTitleInputRef.current?.focus();
         conversationTitleInputRef.current?.select();
@@ -687,7 +689,7 @@ export default function AIChat() {
       await refreshConversations(conversationId);
       cancelRenamingConversation();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to rename the conversation.';
+      const message = error instanceof Error ? error.message : t('Failed to rename the conversation.');
       setErrorText(message);
     }
   };
@@ -772,7 +774,7 @@ export default function AIChat() {
       setPrompt('');
       setIsSending(true);
       setErrorText('');
-      setStatusText('Generating response...');
+      setStatusText(t('Generating response...'));
       currentRequestIdRef.current = requestId;
       currentAssistantIdRef.current = assistantMessage.id;
       currentConversationIdRef.current = activeConversationId;
@@ -786,7 +788,7 @@ export default function AIChat() {
         messages: history,
       });
     }).catch((error) => {
-      const message = error instanceof Error ? error.message : 'Failed to save the user message.';
+      const message = error instanceof Error ? error.message : t('Failed to save the user message.');
       setErrorText(message);
     });
   };
@@ -820,7 +822,7 @@ export default function AIChat() {
       setStatusText('');
       await refreshConversations(activeConversationId);
     }).catch((error) => {
-      const message = error instanceof Error ? error.message : 'Failed to clear the conversation.';
+      const message = error instanceof Error ? error.message : t('Failed to clear the conversation.');
       setErrorText(message);
     });
   };
@@ -842,9 +844,9 @@ export default function AIChat() {
   };
 
   const docsProgressLabel = docsStatus.totalFiles > 0
-    ? `${docsStatus.completedFiles}/${docsStatus.totalFiles} files`
-    : 'No files downloaded yet';
-  const docsActionLabel = docsStatus.hasLocalDocs ? 'Refresh Docs' : 'Download Docs';
+    ? `${docsStatus.completedFiles}/${docsStatus.totalFiles} ${t('files')}`
+    : t('No files downloaded yet');
+  const docsActionLabel = docsStatus.hasLocalDocs ? t('Refresh Docs') : t('Download Docs');
   const docsStateBadgeClassName = docsStatus.state === 'running'
     ? 'bg-amber-100 text-amber-800'
     : docsStatus.hasLocalDocs
@@ -853,16 +855,16 @@ export default function AIChat() {
         ? 'bg-red-100 text-red-800'
         : 'bg-gray-200 text-gray-700';
   const docsStateBadgeLabel = docsStatus.state === 'running'
-    ? 'Downloading'
+    ? t('Downloading')
     : docsStatus.hasLocalDocs
-      ? 'Ready'
+      ? t('Ready')
       : docsStatus.state === 'error'
-        ? 'Unavailable'
-        : 'Missing';
+        ? t('Unavailable')
+        : t('Missing');
   const docsChunkingProgressLabel = docsChunkingStatus.totalFiles > 0
-    ? `${docsChunkingStatus.completedFiles}/${docsChunkingStatus.totalFiles} files`
-    : 'No chunks built yet';
-  const docsChunkingActionLabel = docsChunkingStatus.hasChunks ? 'Rebuild Chunks' : 'Build Chunks';
+    ? `${docsChunkingStatus.completedFiles}/${docsChunkingStatus.totalFiles} ${t('files')}`
+    : t('No chunks built yet');
+  const docsChunkingActionLabel = docsChunkingStatus.hasChunks ? t('Rebuild Chunks') : t('Build Chunks');
   const docsChunkingStateBadgeClassName = docsChunkingStatus.state === 'running'
     ? 'bg-amber-100 text-amber-800'
     : docsChunkingStatus.hasChunks
@@ -871,16 +873,16 @@ export default function AIChat() {
         ? 'bg-red-100 text-red-800'
         : 'bg-gray-200 text-gray-700';
   const docsChunkingStateBadgeLabel = docsChunkingStatus.state === 'running'
-    ? 'Building'
+    ? t('Building')
     : docsChunkingStatus.hasChunks
-      ? 'Ready'
+      ? t('Ready')
       : docsChunkingStatus.state === 'error'
-        ? 'Unavailable'
-        : 'Missing';
+        ? t('Unavailable')
+        : t('Missing');
   const docsEmbeddingsProgressLabel = docsEmbeddingsStatus.totalChunks > 0
-    ? `${docsEmbeddingsStatus.completedChunks}/${docsEmbeddingsStatus.totalChunks} chunks`
-    : 'No embeddings built yet';
-  const docsEmbeddingsActionLabel = docsEmbeddingsStatus.hasEmbeddings ? 'Rebuild Embeddings' : 'Build Embeddings';
+    ? `${docsEmbeddingsStatus.completedChunks}/${docsEmbeddingsStatus.totalChunks} ${t('chunks')}`
+    : t('No embeddings built yet');
+  const docsEmbeddingsActionLabel = docsEmbeddingsStatus.hasEmbeddings ? t('Rebuild Embeddings') : t('Build Embeddings');
   const docsEmbeddingsStateBadgeClassName = docsEmbeddingsStatus.state === 'running'
     ? 'bg-amber-100 text-amber-800'
     : docsEmbeddingsStatus.hasEmbeddings
@@ -889,12 +891,12 @@ export default function AIChat() {
         ? 'bg-red-100 text-red-800'
         : 'bg-gray-200 text-gray-700';
   const docsEmbeddingsStateBadgeLabel = docsEmbeddingsStatus.state === 'running'
-    ? 'Building'
+    ? t('Building')
     : docsEmbeddingsStatus.hasEmbeddings
-      ? 'Ready'
+      ? t('Ready')
       : docsEmbeddingsStatus.state === 'error'
-        ? 'Unavailable'
-        : 'Missing';
+        ? t('Unavailable')
+        : t('Missing');
   const activeConversation = conversations.find((conversation) => conversation.id === activeConversationId) || null;
 
   return (
@@ -902,8 +904,8 @@ export default function AIChat() {
       <aside className="w-[260px] border-r border-gray-200 bg-white flex flex-col">
         <div className="p-3 border-b border-gray-200 space-y-3">
           <div>
-            <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">Conversations</h3>
-            <p className="text-xs text-gray-500">Stored locally in SQLite on this device.</p>
+            <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">{t('Conversations')}</h3>
+            <p className="text-xs text-gray-500">{t('Stored locally in SQLite on this device.')}</p>
           </div>
           <button
             type="button"
@@ -912,7 +914,7 @@ export default function AIChat() {
             className="w-full h-10 px-3 bg-hardwario-primary text-white font-medium rounded hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             <FiPlus className="w-4 h-4" />
-            New Chat
+            {t('New Chat')}
           </button>
           <button
             type="button"
@@ -920,7 +922,7 @@ export default function AIChat() {
             className="w-full h-10 px-3 bg-gray-100 text-gray-700 font-medium rounded hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
           >
             <FiSettings className="w-4 h-4" />
-            Options
+            {t('Options')}
           </button>
         </div>
 
@@ -944,7 +946,7 @@ export default function AIChat() {
                     <div className="min-w-0">
                       <div className="font-medium text-sm text-gray-900 truncate">{conversation.title}</div>
                       <div className="text-xs text-gray-500 truncate">
-                        {conversation.lastMessagePreview || 'No messages yet'}
+                        {conversation.lastMessagePreview || t('No messages yet')}
                       </div>
                     </div>
                     <FiMessageSquare className="w-4 h-4 text-gray-400 flex-shrink-0" />
@@ -990,25 +992,25 @@ export default function AIChat() {
                     }
                   }}
                   className="text-left text-base font-semibold text-gray-900 hover:text-hardwario-primary"
-                  title="Rename conversation"
+                  title={t('Rename conversation')}
                 >
-                  {activeConversation ? activeConversation.title : 'AI Chat'}
+                  {activeConversation ? activeConversation.title : t('AI Chat')}
                 </button>
               )}
               <p className="text-xs text-gray-500">
-                {activeConversation ? `Updated ${formatConversationDate(activeConversation.updatedAt)}` : 'Create a conversation to get started.'}
+                {activeConversation ? `${t('Updated')} ${formatConversationDate(activeConversation.updatedAt)}` : t('Create a conversation to get started.')}
               </p>
             </div>
             <div ref={deleteConfirmRef} className="flex-shrink-0">
               {isDeleteConfirmOpen ? (
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500 whitespace-nowrap">Delete this conversation?</span>
+                  <span className="text-xs text-gray-500 whitespace-nowrap">{t('Delete this conversation?')}</span>
                   <button
                     type="button"
                     onClick={() => setIsDeleteConfirmOpen(false)}
                     className="h-10 w-10 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 transition-colors flex items-center justify-center"
-                    title="Cancel deletion"
-                    aria-label="Cancel deletion"
+                    title={t('Cancel deletion')}
+                    aria-label={t('Cancel deletion')}
                   >
                     <FiX className="w-4 h-4" />
                   </button>
@@ -1017,8 +1019,8 @@ export default function AIChat() {
                     disabled={isSending || !activeConversationId || conversations.length === 1}
                     onClick={() => activeConversationId && void handleDeleteConversation(activeConversationId)}
                     className="h-10 w-10 bg-red-50 text-red-700 rounded hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-                    title="Confirm deletion"
-                    aria-label="Confirm deletion"
+                    title={t('Confirm deletion')}
+                    aria-label={t('Confirm deletion')}
                   >
                     <FiTrash2 className="w-4 h-4" />
                   </button>
@@ -1029,8 +1031,8 @@ export default function AIChat() {
                   disabled={isSending || !activeConversationId || conversations.length === 1}
                   onClick={() => setIsDeleteConfirmOpen(true)}
                   className="h-10 w-10 bg-red-50 text-red-700 rounded hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-                  title="Delete conversation"
-                  aria-label="Delete conversation"
+                  title={t('Delete conversation')}
+                  aria-label={t('Delete conversation')}
                 >
                   <FiTrash2 className="w-4 h-4" />
                 </button>
@@ -1051,12 +1053,12 @@ export default function AIChat() {
             <div className="h-full flex items-center justify-center text-center px-6">
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  {activeConversation ? activeConversation.title : 'Start a conversation'}
+                  {activeConversation ? activeConversation.title : t('Start a conversation')}
                 </h3>
                 <p className="text-sm text-gray-500">
                   {isLoadingConversations
-                    ? 'Loading conversations...'
-                    : 'Save your OpenRouter API key, select a model, and send your first message.'}
+                    ? t('Loading conversations...')
+                    : t('Save your OpenRouter API key, select a model, and send your first message.')}
                 </p>
               </div>
             </div>
@@ -1088,7 +1090,7 @@ export default function AIChat() {
                         ) : (
                           <FiChevronRight className="w-4 h-4" />
                         )}
-                        Related links
+                        {t('Related links')}
                       </button>
                       {openRelatedLinksByMessageId[message.id] ? (
                         <div className="mt-3 space-y-3">
@@ -1129,7 +1131,7 @@ export default function AIChat() {
               onChange={(event) => setPrompt(event.target.value)}
               onKeyDown={handlePromptKeyDown}
               rows={3}
-              placeholder={hasApiKey ? 'Ask anything in this conversation...' : 'Add OpenRouter API key first'}
+              placeholder={hasApiKey ? t('Ask anything in this conversation...') : t('Add OpenRouter API key first')}
               className="flex-1 px-3 py-2 border border-gray-300 bg-white text-gray-900 resize-none focus:outline-none focus:ring-2 focus:ring-hardwario-primary focus:border-transparent"
             />
             {isSending ? (
@@ -1139,7 +1141,7 @@ export default function AIChat() {
                 className="h-10 px-4 bg-gray-100 text-gray-700 font-medium rounded hover:bg-gray-200 transition-colors flex items-center gap-2"
               >
                 <FiSquare className="w-4 h-4" />
-                Stop
+                {t('Stop')}
               </button>
             ) : (
               <button
@@ -1148,7 +1150,7 @@ export default function AIChat() {
                 className="h-10 px-4 bg-hardwario-primary text-white font-medium rounded hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 <FiSend className="w-4 h-4" />
-                Send
+                {t('Send')}
               </button>
             )}
             <button
@@ -1156,7 +1158,7 @@ export default function AIChat() {
               onClick={clearChat}
               disabled={isSending || !activeConversationId}
               className="h-10 px-3 bg-gray-100 text-gray-700 font-medium rounded hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Clear conversation"
+              title={t('Clear conversation')}
             >
               <FiTrash2 className="w-4 h-4" />
             </button>
@@ -1175,14 +1177,14 @@ export default function AIChat() {
           >
             <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">Options</h3>
-                <p className="text-xs text-gray-500">Chat settings and documentation ingestion controls.</p>
+                <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">{t('Options')}</h3>
+                <p className="text-xs text-gray-500">{t('Chat settings and documentation ingestion controls.')}</p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsOptionsOpen(false)}
                 className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
-                title="Close options"
+                title={t('Close options')}
               >
                 <FiX className="w-4 h-4" />
               </button>
@@ -1190,20 +1192,20 @@ export default function AIChat() {
 
             <div className="p-4 space-y-4">
               <div className="rounded border border-gray-200 bg-gray-50 p-3">
-                <label className="block text-sm font-medium text-gray-700 mb-1">OpenRouter API Key</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('OpenRouter API Key')}</label>
                 <div className="flex gap-2">
                   <input
                     type="password"
                     value={apiKeyInput}
                     onChange={(event) => setApiKeyInput(event.target.value)}
-                    placeholder={hasApiKey ? 'Saved key (enter a new one to replace)' : 'sk-or-v1-...'}
+                    placeholder={hasApiKey ? t('Saved key (enter a new one to replace)') : 'sk-or-v1-...'}
                     className="flex-1 px-3 py-2 border border-gray-300 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-hardwario-primary focus:border-transparent"
                   />
                   <button
                     onClick={saveApiKey}
                     className="px-3 py-2 bg-hardwario-primary text-white text-sm font-medium hover:opacity-90 transition-opacity rounded"
                     type="button"
-                    title="Save API key"
+                    title={t('Save API key')}
                   >
                     <FiKey className="w-4 h-4" />
                   </button>
@@ -1211,13 +1213,15 @@ export default function AIChat() {
                     onClick={clearApiKey}
                     className="px-3 py-2 bg-gray-100 text-gray-700 text-sm font-medium hover:bg-gray-200 transition-colors rounded"
                     type="button"
-                    title="Clear API key"
+                    title={t('Clear API key')}
                   >
                     <FiTrash2 className="w-4 h-4" />
                   </button>
                 </div>
                 <p className="mt-1 text-xs text-gray-500">
-                  Key is stored on this device {encryptionAvailable ? 'using OS encryption.' : 'in local app settings (unencrypted fallback).'}
+                  {encryptionAvailable
+                    ? t('Key is stored on this device using OS encryption.')
+                    : t('Key is stored on this device in local app settings (unencrypted fallback).')}
                 </p>
                 <p className="mt-1 text-xs">
                   <a
@@ -1228,13 +1232,13 @@ export default function AIChat() {
                       void window.electronAPI.shell.openExternal('https://openrouter.ai/keys');
                     }}
                   >
-                    Create or manage OpenRouter key
+                    {t('Create or manage OpenRouter key')}
                   </a>
                 </p>
               </div>
 
               <div className="rounded border border-gray-200 bg-gray-50 p-3">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Model</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('Model')}</label>
                 <select
                   value={model}
                   onChange={(event) => void handleModelChange(event.target.value)}
@@ -1246,7 +1250,7 @@ export default function AIChat() {
                     </option>
                   ))}
                 </select>
-                <p className="mt-1 text-xs text-gray-500">Use a free model for testing, then switch to GPT-4.1 Mini.</p>
+                <p className="mt-1 text-xs text-gray-500">{t('Use a free model for testing, then switch to GPT-4.1 Mini.')}</p>
               </div>
 
               <div className="rounded border border-gray-200 bg-gray-50 p-3 space-y-2">
@@ -1262,13 +1266,13 @@ export default function AIChat() {
                       ) : (
                         <FiChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                       )}
-                      <h3 className="text-sm font-medium text-gray-900">Documentation Ingestion</h3>
+                      <h3 className="text-sm font-medium text-gray-900">{t('Documentation Ingestion')}</h3>
                       <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${docsStateBadgeClassName}`}>
                         {docsStateBadgeLabel}
                       </span>
                     </div>
                     <p className="mt-1 text-xs text-gray-500">
-                      Local-first testing control for `tower/hardware-modules/` from GitHub, excluding `images/`.
+                      {t('Local-first testing control for `tower/hardware-modules/` from GitHub, excluding `images/`.')}
                     </p>
                   </button>
                   <button
@@ -1280,7 +1284,7 @@ export default function AIChat() {
                     {docsStatus.state === 'running' ? (
                       <>
                         <FiRefreshCw className="w-4 h-4 animate-spin" />
-                        Downloading
+                        {t('Downloading')}
                       </>
                     ) : (
                       <>
@@ -1293,10 +1297,10 @@ export default function AIChat() {
                 {openOptionSections.docs && (docsStatus.startedAt || docsStatus.finishedAt) ? (
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
                     {docsStatus.startedAt ? (
-                      <span>Started: {formatConversationDate(docsStatus.startedAt)}</span>
+                      <span>{t('Started')}: {formatConversationDate(docsStatus.startedAt)}</span>
                     ) : null}
                     {docsStatus.finishedAt ? (
-                      <span>Finished: {formatConversationDate(docsStatus.finishedAt)}</span>
+                      <span>{t('Finished')}: {formatConversationDate(docsStatus.finishedAt)}</span>
                     ) : null}
                   </div>
                 ) : null}
@@ -1305,26 +1309,26 @@ export default function AIChat() {
                   <>
                     <div className="grid grid-cols-1 gap-2 text-xs text-gray-600">
                       <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                        <div className="font-medium text-gray-800">Status</div>
+                        <div className="font-medium text-gray-800">{t('Status')}</div>
                         <div>{docsStatus.message}</div>
                       </div>
                       <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                        <div className="font-medium text-gray-800">Progress</div>
+                        <div className="font-medium text-gray-800">{t('Progress')}</div>
                         <div>{docsProgressLabel}</div>
                       </div>
                       <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                        <div className="font-medium text-gray-800">Local Availability</div>
-                        <div>{docsStatus.hasLocalDocs ? 'Local corpus available on disk' : 'No local corpus yet'}</div>
+                        <div className="font-medium text-gray-800">{t('Local Availability')}</div>
+                        <div>{docsStatus.hasLocalDocs ? t('Local corpus available on disk') : t('No local corpus yet')}</div>
                       </div>
                       {docsStatus.targetDir ? (
                         <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                          <div className="font-medium text-gray-800">Raw Docs Path</div>
+                          <div className="font-medium text-gray-800">{t('Raw Docs Path')}</div>
                           <div className="font-mono break-all">{docsStatus.targetDir}</div>
                         </div>
                       ) : null}
                       {docsStatus.manifestPath ? (
                         <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                          <div className="font-medium text-gray-800">Manifest Path</div>
+                          <div className="font-medium text-gray-800">{t('Manifest Path')}</div>
                           <div className="font-mono break-all">{docsStatus.manifestPath}</div>
                         </div>
                       ) : null}
@@ -1333,7 +1337,7 @@ export default function AIChat() {
                     {docsStatus.error ? (
                       <p className="text-xs text-red-600">
                         {docsStatus.hasLocalDocs
-                          ? `Refresh failed, but the previous local corpus is still available: ${docsStatus.error}`
+                          ? `${t('Refresh failed, but the previous local corpus is still available:')} ${docsStatus.error}`
                           : docsStatus.error}
                       </p>
                     ) : null}
@@ -1354,13 +1358,13 @@ export default function AIChat() {
                       ) : (
                         <FiChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                       )}
-                      <h3 className="text-sm font-medium text-gray-900">Chunk Generation</h3>
+                      <h3 className="text-sm font-medium text-gray-900">{t('Chunk Generation')}</h3>
                       <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${docsChunkingStateBadgeClassName}`}>
                         {docsChunkingStateBadgeLabel}
                       </span>
                     </div>
                     <p className="mt-1 text-xs text-gray-500">
-                      Build persisted chunk records directly from the downloaded raw markdown.
+                      {t('Build persisted chunk records directly from the downloaded raw markdown.')}
                     </p>
                   </button>
                   <button
@@ -1372,7 +1376,7 @@ export default function AIChat() {
                     {docsChunkingStatus.state === 'running' ? (
                       <>
                         <FiRefreshCw className="w-4 h-4 animate-spin" />
-                        Building
+                        {t('Building')}
                       </>
                     ) : (
                       <>
@@ -1385,10 +1389,10 @@ export default function AIChat() {
                 {openOptionSections.chunks && (docsChunkingStatus.startedAt || docsChunkingStatus.finishedAt) ? (
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
                     {docsChunkingStatus.startedAt ? (
-                      <span>Started: {formatConversationDate(docsChunkingStatus.startedAt)}</span>
+                      <span>{t('Started')}: {formatConversationDate(docsChunkingStatus.startedAt)}</span>
                     ) : null}
                     {docsChunkingStatus.finishedAt ? (
-                      <span>Finished: {formatConversationDate(docsChunkingStatus.finishedAt)}</span>
+                      <span>{t('Finished')}: {formatConversationDate(docsChunkingStatus.finishedAt)}</span>
                     ) : null}
                   </div>
                 ) : null}
@@ -1397,26 +1401,26 @@ export default function AIChat() {
                   <>
                     <div className="grid grid-cols-1 gap-2 text-xs text-gray-600">
                       <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                        <div className="font-medium text-gray-800">Status</div>
+                        <div className="font-medium text-gray-800">{t('Status')}</div>
                         <div>{docsChunkingStatus.message}</div>
                       </div>
                       <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                        <div className="font-medium text-gray-800">Progress</div>
+                        <div className="font-medium text-gray-800">{t('Progress')}</div>
                         <div>{docsChunkingProgressLabel}</div>
                       </div>
                       <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                        <div className="font-medium text-gray-800">Chunk Count</div>
+                        <div className="font-medium text-gray-800">{t('Chunk Count')}</div>
                         <div>{docsChunkingStatus.chunkCount}</div>
                       </div>
                       {docsChunkingStatus.outputPath ? (
                         <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                          <div className="font-medium text-gray-800">Chunks Output Path</div>
+                          <div className="font-medium text-gray-800">{t('Chunks Output Path')}</div>
                           <div className="font-mono break-all">{docsChunkingStatus.outputPath}</div>
                         </div>
                       ) : null}
                       {docsChunkingStatus.manifestPath ? (
                         <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                          <div className="font-medium text-gray-800">Chunks Manifest Path</div>
+                          <div className="font-medium text-gray-800">{t('Chunks Manifest Path')}</div>
                           <div className="font-mono break-all">{docsChunkingStatus.manifestPath}</div>
                         </div>
                       ) : null}
@@ -1425,7 +1429,7 @@ export default function AIChat() {
                     {docsChunkingStatus.error ? (
                       <p className="text-xs text-red-600">
                         {docsChunkingStatus.hasChunks
-                          ? `Chunk rebuild failed, but the previous chunk set is still available: ${docsChunkingStatus.error}`
+                          ? `${t('Chunk rebuild failed, but the previous chunk set is still available:')} ${docsChunkingStatus.error}`
                           : docsChunkingStatus.error}
                       </p>
                     ) : null}
@@ -1446,13 +1450,13 @@ export default function AIChat() {
                       ) : (
                         <FiChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                       )}
-                      <h3 className="text-sm font-medium text-gray-900">Embeddings</h3>
+                      <h3 className="text-sm font-medium text-gray-900">{t('Embeddings')}</h3>
                       <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${docsEmbeddingsStateBadgeClassName}`}>
                         {docsEmbeddingsStateBadgeLabel}
                       </span>
                     </div>
                     <p className="mt-1 text-xs text-gray-500">
-                      Generate a persistent semantic vector index for the current chunk set using OpenRouter embeddings.
+                      {t('Generate a persistent semantic vector index for the current chunk set using OpenRouter embeddings.')}
                     </p>
                   </button>
                   <button
@@ -1464,7 +1468,7 @@ export default function AIChat() {
                     {docsEmbeddingsStatus.state === 'running' ? (
                       <>
                         <FiRefreshCw className="w-4 h-4 animate-spin" />
-                        Building
+                        {t('Building')}
                       </>
                     ) : (
                       <>
@@ -1477,10 +1481,10 @@ export default function AIChat() {
                 {openOptionSections.embeddings && (docsEmbeddingsStatus.startedAt || docsEmbeddingsStatus.finishedAt) ? (
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
                     {docsEmbeddingsStatus.startedAt ? (
-                      <span>Started: {formatConversationDate(docsEmbeddingsStatus.startedAt)}</span>
+                      <span>{t('Started')}: {formatConversationDate(docsEmbeddingsStatus.startedAt)}</span>
                     ) : null}
                     {docsEmbeddingsStatus.finishedAt ? (
-                      <span>Finished: {formatConversationDate(docsEmbeddingsStatus.finishedAt)}</span>
+                      <span>{t('Finished')}: {formatConversationDate(docsEmbeddingsStatus.finishedAt)}</span>
                     ) : null}
                   </div>
                 ) : null}
@@ -1489,30 +1493,30 @@ export default function AIChat() {
                   <>
                     <div className="grid grid-cols-1 gap-2 text-xs text-gray-600">
                       <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                        <div className="font-medium text-gray-800">Status</div>
+                        <div className="font-medium text-gray-800">{t('Status')}</div>
                         <div>{docsEmbeddingsStatus.message}</div>
                       </div>
                       <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                        <div className="font-medium text-gray-800">Progress</div>
+                        <div className="font-medium text-gray-800">{t('Progress')}</div>
                         <div>{docsEmbeddingsProgressLabel}</div>
                       </div>
                       <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                        <div className="font-medium text-gray-800">Embedding Count</div>
+                        <div className="font-medium text-gray-800">{t('Embedding Count')}</div>
                         <div>{docsEmbeddingsStatus.embeddingCount}</div>
                       </div>
                       <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                        <div className="font-medium text-gray-800">Embedding Model</div>
+                        <div className="font-medium text-gray-800">{t('Embedding Model')}</div>
                         <div className="font-mono break-all">{docsEmbeddingsStatus.embeddingModel}</div>
                       </div>
                       {docsEmbeddingsStatus.outputPath ? (
                         <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                          <div className="font-medium text-gray-800">Embeddings Output Path</div>
+                          <div className="font-medium text-gray-800">{t('Embeddings Output Path')}</div>
                           <div className="font-mono break-all">{docsEmbeddingsStatus.outputPath}</div>
                         </div>
                       ) : null}
                       {docsEmbeddingsStatus.manifestPath ? (
                         <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                          <div className="font-medium text-gray-800">Embeddings Manifest Path</div>
+                          <div className="font-medium text-gray-800">{t('Embeddings Manifest Path')}</div>
                           <div className="font-mono break-all">{docsEmbeddingsStatus.manifestPath}</div>
                         </div>
                       ) : null}
@@ -1521,7 +1525,7 @@ export default function AIChat() {
                     {docsEmbeddingsStatus.error ? (
                       <p className="text-xs text-red-600">
                         {docsEmbeddingsStatus.hasEmbeddings
-                          ? `Embedding rebuild failed, but the previous embedding set is still available: ${docsEmbeddingsStatus.error}`
+                          ? `${t('Embedding rebuild failed, but the previous embedding set is still available:')} ${docsEmbeddingsStatus.error}`
                           : docsEmbeddingsStatus.error}
                       </p>
                     ) : null}
@@ -1542,10 +1546,10 @@ export default function AIChat() {
                       ) : (
                         <FiChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                       )}
-                      <h3 className="text-sm font-medium text-gray-900">Semantic Retrieval</h3>
+                      <h3 className="text-sm font-medium text-gray-900">{t('Semantic Retrieval')}</h3>
                     </div>
                     <p className="mt-1 text-xs text-gray-500">
-                      Test query embedding and top-k chunk retrieval against the stored semantic index.
+                      {t('Test query embedding and top-k chunk retrieval against the stored semantic index.')}
                     </p>
                   </button>
                 </div>
@@ -1557,7 +1561,7 @@ export default function AIChat() {
                         type="text"
                         value={retrievalQuery}
                         onChange={(event) => setRetrievalQuery(event.target.value)}
-                        placeholder="Ask a hardware question for retrieval testing..."
+                        placeholder={t('Ask a hardware question for retrieval testing...')}
                         className="px-3 py-2 border border-gray-300 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-hardwario-primary focus:border-transparent"
                       />
                       <input
@@ -1577,10 +1581,10 @@ export default function AIChat() {
                         {isRetrieving ? (
                           <>
                             <FiRefreshCw className="w-4 h-4 animate-spin" />
-                            Retrieving
+                            {t('Retrieving')}
                           </>
                         ) : (
-                          'Retrieve Chunks'
+                          t('Retrieve Chunks')
                         )}
                       </button>
                     </div>
@@ -1592,7 +1596,7 @@ export default function AIChat() {
                     {retrievalResult ? (
                       <div className="space-y-2">
                         <div className="text-xs text-gray-600">
-                          Returned {retrievalResult.resultCount} chunks using `{retrievalResult.embeddingModel}`.
+                          {t('Returned')} {retrievalResult.resultCount} {t('chunks using')} `{retrievalResult.embeddingModel}`.
                         </div>
                         <div className="space-y-2">
                           {retrievalResult.results.map((result, index) => (
@@ -1602,7 +1606,7 @@ export default function AIChat() {
                                   {index + 1}. {result.title} / {result.heading}
                                 </div>
                                 <div className="font-mono text-gray-500">
-                                  score {result.score.toFixed(4)}
+                                  {t('score')} {result.score.toFixed(4)}
                                 </div>
                               </div>
                               <div className="font-mono break-all text-gray-500">{result.path}</div>
@@ -1644,10 +1648,10 @@ export default function AIChat() {
                       ) : (
                         <FiChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
                       )}
-                      <h3 className="text-sm font-medium text-gray-900">Prompt Debug</h3>
+                      <h3 className="text-sm font-medium text-gray-900">{t('Prompt Debug')}</h3>
                     </div>
                     <p className="mt-1 text-xs text-gray-500">
-                      Inspect the exact augmented payload that was sent to the model for the last chat request.
+                      {t('Inspect the exact augmented payload that was sent to the model for the last chat request.')}
                     </p>
                   </button>
                 </div>
@@ -1658,37 +1662,37 @@ export default function AIChat() {
                       <div className="space-y-2">
                         <div className="grid grid-cols-1 gap-2 text-xs text-gray-600">
                           <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                            <div className="font-medium text-gray-800">Request ID</div>
+                            <div className="font-medium text-gray-800">{t('Request ID')}</div>
                             <div className="font-mono break-all">{promptDebugPayload.requestId}</div>
                           </div>
                           <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                            <div className="font-medium text-gray-800">Model</div>
+                            <div className="font-medium text-gray-800">{t('Model')}</div>
                             <div className="font-mono break-all">{promptDebugPayload.model}</div>
                           </div>
                           <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                            <div className="font-medium text-gray-800">Retrieval Top K</div>
+                            <div className="font-medium text-gray-800">{t('Retrieval Top K')}</div>
                             <div>{promptDebugPayload.retrievalTopK}</div>
                           </div>
                           <div className="rounded border border-gray-200 bg-white px-3 py-2">
-                            <div className="font-medium text-gray-800">Message Count</div>
+                            <div className="font-medium text-gray-800">{t('Message Count')}</div>
                             <div>{promptDebugPayload.messages.length}</div>
                           </div>
                         </div>
 
                         <div className="rounded border border-gray-200 bg-white p-3">
-                          <div className="mb-2 text-xs font-medium text-gray-800">Exact Messages Sent To AI</div>
+                          <div className="mb-2 text-xs font-medium text-gray-800">{t('Exact Messages Sent To AI')}</div>
                           <pre className="mb-3 max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded bg-gray-950 p-3 text-[11px] leading-relaxed text-gray-100">
                             {formatPromptDebugTranscript(promptDebugPayload)}
                           </pre>
 
-                          <div className="mb-2 text-xs font-medium text-gray-800">Raw Payload JSON</div>
+                          <div className="mb-2 text-xs font-medium text-gray-800">{t('Raw Payload JSON')}</div>
                           <pre className="max-h-[420px] overflow-auto whitespace-pre-wrap break-words rounded bg-gray-950 p-3 text-[11px] leading-relaxed text-gray-100">
                             {JSON.stringify(promptDebugPayload, null, 2)}
                           </pre>
                         </div>
                       </div>
                     ) : (
-                      <p className="text-xs text-gray-500">Send a chat message first. The exact payload sent to the model will appear here.</p>
+                      <p className="text-xs text-gray-500">{t('Send a chat message first. The exact payload sent to the model will appear here.')}</p>
                     )}
                   </>
                 ) : null}
