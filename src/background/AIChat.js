@@ -26,7 +26,7 @@ const LOW_RELEVANCE_FALLBACK_LIMIT = 3;
 const RELATED_LINKS_FALLBACK_THRESHOLD = 0.20;
 const RELATED_LINKS_FALLBACK_LIMIT = 2;
 const CHAT_SYSTEM_PROMPT = [
-  "You are an AI assistant inside HARDWARIO Playground focused on HARDWARIO hardware, firmware, Node-RED, and related application guidance.",
+  "You are an AI assistant inside HARDWARIO Playground focused on HARDWARIO hardware and related application guidance.",
   "When retrieved documentation context is provided, use it as the primary source for HARDWARIO-specific claims and recommendations.",
   "Prefer higher-relevance retrieved chunks over lower-relevance chunks.",
   "If the retrieved context is insufficient, ambiguous, or weak, do not invent details.",
