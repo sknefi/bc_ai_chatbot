@@ -1,6 +1,6 @@
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { FiChevronDown, FiChevronRight, FiDownload, FiKey, FiMessageSquare, FiPlus, FiRefreshCw, FiSend, FiSettings, FiSquare, FiTrash2, FiX } from 'react-icons/fi';
+import { FiChevronDown, FiChevronRight, FiDownload, FiKey, FiPlus, FiRefreshCw, FiSend, FiSettings, FiSquare, FiTrash2, FiX } from 'react-icons/fi';
 import remarkGfm from 'remark-gfm';
 import * as i18n from '../../utils/i18n';
 import type {
@@ -951,14 +951,11 @@ export default function AIChat() {
                   onClick={() => handleSelectConversation(conversation.id)}
                   className="w-full text-left px-3 py-3 disabled:cursor-not-allowed"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="font-medium text-sm text-gray-900 truncate">{conversation.title}</div>
-                      <div className="text-xs text-gray-500 truncate">
-                        {conversation.lastMessagePreview || t('No messages yet')}
-                      </div>
+                  <div className="min-w-0">
+                    <div className="font-medium text-sm text-gray-900 truncate">{conversation.title}</div>
+                    <div className="text-xs text-gray-500 truncate">
+                      {conversation.lastMessagePreview || t('No messages yet')}
                     </div>
-                    <FiMessageSquare className="w-4 h-4 text-gray-400 flex-shrink-0" />
                   </div>
                   <div className="mt-2 text-[11px] text-gray-400">
                     {formatConversationDate(conversation.updatedAt)}

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { HashRouter, Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import { FiAlertTriangle, FiWifi, FiWifiOff, FiRefreshCw, FiX, FiZoomIn, FiZoomOut, FiChevronDown, FiGlobe, FiCpu, FiMessageSquare, FiDownload, FiHelpCircle, FiExternalLink, FiBook, FiVideo } from 'react-icons/fi';
+import { RiRobot3Line } from 'react-icons/ri';
 import type { SerialPortInfo } from '../../electron/preload';
 
 import { useRadioManager } from './hooks/useRadioManager';
@@ -37,7 +38,7 @@ const modalIcons: Record<string, React.ComponentType<{ className?: string }>> = 
   '/messages': FiMessageSquare,
   '/settings': FiGlobe,
   '/firmware': FiDownload,
-  '/ai-chat': FiMessageSquare,
+  '/ai-chat': RiRobot3Line,
 };
 
 // Hardware dropdown component for Devices, Messages, and Firmware (responsive)
@@ -453,7 +454,7 @@ export default function App() {
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`
                 }
               >
-                <FiMessageSquare className="w-3.5 h-3.5" />
+                <RiRobot3Line className="w-3.5 h-3.5" />
                 {i18n.__('AI Chat')}
               </NavLink>
 
