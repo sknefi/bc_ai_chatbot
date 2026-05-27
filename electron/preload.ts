@@ -208,6 +208,7 @@ export interface AIChatStoredMessage {
   conversationId: string;
   role: 'user' | 'assistant';
   content: string;
+  relatedLinkGroups: AIChatRelatedLinkGroup[];
   createdAt: string;
   updatedAt: string;
 }
@@ -322,6 +323,7 @@ export interface ElectronAPI {
       role: 'user' | 'assistant';
       content: string;
       model?: string;
+      relatedLinkGroups?: AIChatRelatedLinkGroup[];
     }) => Promise<AIChatStoredMessage>;
   };
 }
@@ -484,6 +486,7 @@ const electronAPI: ElectronAPI = {
       role: 'user' | 'assistant';
       content: string;
       model?: string;
+      relatedLinkGroups?: AIChatRelatedLinkGroup[];
     }) => ipcRenderer.invoke('ai-chat-store/add-message', input),
   },
 };

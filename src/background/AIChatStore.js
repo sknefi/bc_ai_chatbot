@@ -7,6 +7,32 @@ const Database = require("better-sqlite3");
 
 let db = null;
 
+function parseRelatedLinkGroups(value) {
+  if (typeof value !== "string" || !value.trim()) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error("ai-chat-store: failed to parse related links", error);
+    return [];
+  }
+}
+
+function ensureMessagesSchema(database) {
+  const columns = database.prepare(`PRAGMA table_info(messages)`).all();
+  const hasRelatedLinksColumn = columns.some((column) => column?.name === "related_links_json");
+
+  if (!hasRelatedLinksColumn) {
+    database.exec(`
+      ALTER TABLE messages
+      ADD COLUMN related_links_json TEXT NOT NULL DEFAULT '';
+    `);
+  }
+}
+
 function getDb() {
   if (db) {
     return db;
@@ -31,6 +57,7 @@ function getDb() {
       conversation_id TEXT NOT NULL,
       role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
       content TEXT NOT NULL,
+      related_links_json TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
@@ -42,6 +69,8 @@ function getDb() {
     CREATE INDEX IF NOT EXISTS idx_conversations_updated_at
       ON conversations (updated_at DESC);
   `);
+
+  ensureMessagesSchema(db);
 
   return db;
 }
@@ -64,6 +93,7 @@ function makeMessageRow(row) {
     conversationId: row.conversation_id,
     role: row.role,
     content: row.content,
+    relatedLinkGroups: parseRelatedLinkGroups(row.related_links_json),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -98,7 +128,7 @@ function listConversations() {
 function getConversationMessages(conversationId) {
   const database = getDb();
   const rows = database.prepare(`
-    SELECT id, conversation_id, role, content, created_at, updated_at
+    SELECT id, conversation_id, role, content, related_links_json, created_at, updated_at
     FROM messages
     WHERE conversation_id = ?
     ORDER BY created_at ASC, id ASC
@@ -187,6 +217,10 @@ function addMessage(input) {
   const role = input?.role === "assistant" ? "assistant" : "user";
   const content = typeof input?.content === "string" ? input.content : "";
   const model = typeof input?.model === "string" ? input.model.trim() : "";
+  const relatedLinkGroups = Array.isArray(input?.relatedLinkGroups) ? input.relatedLinkGroups : [];
+  const relatedLinksJson = role === "assistant" && relatedLinkGroups.length > 0
+    ? JSON.stringify(relatedLinkGroups)
+    : "";
 
   if (!conversationId) {
     throw new Error("Conversation id is required.");
@@ -211,9 +245,9 @@ function addMessage(input) {
 
   const tx = database.transaction(() => {
     database.prepare(`
-      INSERT INTO messages (id, conversation_id, role, content, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(messageId, conversationId, role, content, now, now);
+      INSERT INTO messages (id, conversation_id, role, content, related_links_json, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(messageId, conversationId, role, content, relatedLinksJson, now, now);
 
     const updateParams = [now, conversationId];
     let updateSql = `UPDATE conversations SET updated_at = ?`;
@@ -240,6 +274,7 @@ function addMessage(input) {
     conversation_id: conversationId,
     role,
     content,
+    related_links_json: relatedLinksJson,
     created_at: now,
     updated_at: now,
   });

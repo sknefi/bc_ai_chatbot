@@ -240,6 +240,7 @@ export default function AIChat() {
   const currentRequestIdRef = useRef<string | null>(null);
   const currentAssistantIdRef = useRef<string | null>(null);
   const currentAssistantContentRef = useRef('');
+  const currentAssistantRelatedLinkGroupsRef = useRef<AIChatRelatedLinkGroup[]>([]);
   const currentConversationIdRef = useRef<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const conversationTitleInputRef = useRef<HTMLInputElement | null>(null);
@@ -249,6 +250,7 @@ export default function AIChat() {
     id: message.id,
     role: message.role,
     content: message.content,
+    relatedLinkGroups: Array.isArray(message.relatedLinkGroups) ? message.relatedLinkGroups : undefined,
     createdAt: message.createdAt,
   });
 
@@ -342,12 +344,16 @@ export default function AIChat() {
       role: 'assistant',
       content,
       model,
+      relatedLinkGroups: currentAssistantRelatedLinkGroupsRef.current,
     });
 
     setMessages((prev) =>
       prev.map((message) =>
         message.id === assistantId
-          ? mapStoredMessage(storedMessage)
+          ? {
+              ...mapStoredMessage(storedMessage),
+              relatedLinkGroups: message.relatedLinkGroups,
+            }
           : message
       )
     );
@@ -420,6 +426,7 @@ export default function AIChat() {
             : message
         )
       );
+      currentAssistantRelatedLinkGroupsRef.current = payload.groups;
     });
 
     const finalizeStreamingState = (nextStatusText: string, nextErrorText = '') => {
@@ -432,6 +439,7 @@ export default function AIChat() {
       currentAssistantIdRef.current = null;
       currentConversationIdRef.current = null;
       currentAssistantContentRef.current = '';
+      currentAssistantRelatedLinkGroupsRef.current = [];
     };
 
     const unsubDone = window.electronAPI.aiChat.onDone((payload) => {
@@ -779,6 +787,7 @@ export default function AIChat() {
       currentAssistantIdRef.current = assistantMessage.id;
       currentConversationIdRef.current = activeConversationId;
       currentAssistantContentRef.current = '';
+      currentAssistantRelatedLinkGroupsRef.current = [];
 
       await syncConversationList();
 
