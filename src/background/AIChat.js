@@ -23,8 +23,6 @@ const HIGH_RELEVANCE_THRESHOLD = 0.60;
 const MEDIUM_RELEVANCE_THRESHOLD = 0.45;
 const LOW_RELEVANCE_THRESHOLD = 0.30;
 const LOW_RELEVANCE_FALLBACK_LIMIT = 3;
-const RELATED_LINKS_FALLBACK_THRESHOLD = 0.20;
-const RELATED_LINKS_FALLBACK_LIMIT = 2;
 const CHAT_SYSTEM_PROMPT = [
   "You are an AI assistant inside HARDWARIO Playground focused on HARDWARIO hardware and related application guidance.",
   "When retrieved documentation context is provided, use it as the primary source for HARDWARIO-specific claims and recommendations.",
@@ -440,17 +438,7 @@ function buildRetrievalQuery(messages) {
 function buildRelatedLinkGroups(retrievalResult) {
   const results = Array.isArray(retrievalResult?.results) ? retrievalResult.results : [];
   const { selected } = selectRetrievedGroups(results);
-  let selectedItems = selected.flatMap((group) => group.items);
-
-  if (selectedItems.length === 0) {
-    selectedItems = results
-      .filter((item) =>
-        item.score >= RELATED_LINKS_FALLBACK_THRESHOLD &&
-        Array.isArray(item.relatedLinks) &&
-        item.relatedLinks.some((link) => Boolean(link?.url))
-      )
-      .slice(0, RELATED_LINKS_FALLBACK_LIMIT);
-  }
+  const selectedItems = selected.flatMap((group) => group.items);
 
   if (selectedItems.length === 0) {
     return [];
