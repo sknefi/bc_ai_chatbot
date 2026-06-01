@@ -1562,37 +1562,42 @@ export default function AIChat() {
 
                 {openOptionSections.retrieval ? (
                   <>
-                    <div className="grid grid-cols-[1fr_96px_auto] gap-2">
-                      <input
-                        type="text"
+                    <div className="space-y-2">
+                      <textarea
                         value={retrievalQuery}
                         onChange={(event) => setRetrievalQuery(event.target.value)}
                         placeholder={t('Ask a hardware question for retrieval testing...')}
-                        className="px-3 py-2 border border-gray-300 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-hardwario-primary focus:border-transparent"
+                        rows={3}
+                        className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 resize-y focus:outline-none focus:ring-2 focus:ring-hardwario-primary focus:border-transparent"
                       />
-                      <input
-                        type="number"
-                        min={1}
-                        max={20}
-                        value={retrievalTopK}
-                        onChange={(event) => setRetrievalTopK(event.target.value)}
-                        className="px-3 py-2 border border-gray-300 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-hardwario-primary focus:border-transparent"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => void handleRetrieveChunks()}
-                        disabled={isRetrieving || !docsEmbeddingsStatus.hasEmbeddings}
-                        className="h-10 px-4 bg-gray-900 text-white font-medium rounded hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                      >
-                        {isRetrieving ? (
-                          <>
-                            <FiRefreshCw className="w-4 h-4 animate-spin" />
-                            {t('Retrieving')}
-                          </>
-                        ) : (
-                          t('Retrieve Chunks')
-                        )}
-                      </button>
+                      <div className="flex flex-wrap items-start gap-2">
+                        <label className="flex items-center gap-2 text-xs text-gray-600">
+                          <span className="whitespace-nowrap">{t('Top-K')}</span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={20}
+                            value={retrievalTopK}
+                            onChange={(event) => setRetrievalTopK(event.target.value)}
+                            className="w-24 px-3 py-2 border border-gray-300 bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-hardwario-primary focus:border-transparent"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => void handleRetrieveChunks()}
+                          disabled={isRetrieving || !docsEmbeddingsStatus.hasEmbeddings}
+                          className="h-10 px-4 bg-gray-900 text-white font-medium rounded hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                          {isRetrieving ? (
+                            <>
+                              <FiRefreshCw className="w-4 h-4 animate-spin" />
+                              {t('Retrieving')}
+                            </>
+                          ) : (
+                            t('Retrieve Chunks')
+                          )}
+                        </button>
+                      </div>
                     </div>
 
                     {retrievalError ? (
