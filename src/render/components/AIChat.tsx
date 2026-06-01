@@ -1629,7 +1629,6 @@ export default function AIChat() {
                                 </div>
                               </div>
                               <div className="font-mono break-all text-gray-500">{result.path}</div>
-                              <div className="line-clamp-6 whitespace-pre-wrap">{result.text}</div>
                               {result.relatedLinks.length > 0 ? (
                                 <div className="flex flex-wrap gap-2">
                                   {result.relatedLinks.map((link) => (
