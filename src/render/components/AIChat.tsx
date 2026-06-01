@@ -162,7 +162,7 @@ const DEFAULT_RETRIEVAL_TOP_K = '6';
 export default function AIChat() {
   const t = i18n.__;
   const [openOptionSections, setOpenOptionSections] = useState({
-    docs: true,
+    docs: false,
     chunks: false,
     embeddings: false,
     retrieval: false,
@@ -642,6 +642,13 @@ export default function AIChat() {
       setRetrievalResult(null);
     } finally {
       setIsRetrieving(false);
+    }
+  };
+
+  const handleRetrievalQueryKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      void handleRetrieveChunks();
     }
   };
 
@@ -1566,6 +1573,7 @@ export default function AIChat() {
                       <textarea
                         value={retrievalQuery}
                         onChange={(event) => setRetrievalQuery(event.target.value)}
+                        onKeyDown={handleRetrievalQueryKeyDown}
                         placeholder={t('Ask a hardware question for retrieval testing...')}
                         rows={3}
                         className="w-full px-3 py-2 border border-gray-300 bg-white text-gray-900 resize-y focus:outline-none focus:ring-2 focus:ring-hardwario-primary focus:border-transparent"
