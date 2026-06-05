@@ -21,6 +21,12 @@ const Settings = require('../src/background/Settings');
 const Firmware = require('../src/background/Firmware');
 const Gateway = require('../src/background/Gateway');
 const Home = require('../src/background/Home');
+const AIChat = require('../src/background/AIChat');
+const AIChatStore = require('../src/background/AIChatStore');
+const DocsIngest = require('../src/background/DocsIngest');
+const DocsChunking = require('../src/background/DocsChunking');
+const DocsEmbeddings = require('../src/background/DocsEmbeddings');
+const DocsRetrieval = require('../src/background/DocsRetrieval');
 const CustomMenu = require('../src/utils/Menu');
 
 // Enable context menu
@@ -121,6 +127,12 @@ if (!fs.existsSync(userDataPath)) {
 
 // Setup background workers
 Settings.setup();
+AIChat.setup();
+AIChatStore.setup();
+DocsIngest.setup();
+DocsChunking.setup();
+DocsEmbeddings.setup();
+DocsRetrieval.setup();
 MqttBroker.setup();
 Gateway.setup();
 Firmware.setup();

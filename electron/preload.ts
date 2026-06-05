@@ -54,6 +54,165 @@ export interface FileDialogResult {
   canceled: boolean;
 }
 
+export interface AIChatMessageInput {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+export interface AIChatSendPayload {
+  requestId: string;
+  model: string;
+  messages: AIChatMessageInput[];
+}
+
+export interface AIChatModelOption {
+  id: string;
+  label: string;
+  free: boolean;
+}
+
+export interface AIChatConfig {
+  hasApiKey: boolean;
+  model: string;
+  defaultModel: string;
+  modelOptions: AIChatModelOption[];
+  encryptionAvailable: boolean;
+}
+
+export interface AIChatChunkPayload {
+  requestId: string;
+  delta: string;
+}
+
+export interface AIChatDonePayload {
+  requestId: string;
+}
+
+export interface AIChatRelatedLink {
+  label: string;
+  url: string;
+}
+
+export interface AIChatRelatedLinkGroup {
+  title: string;
+  links: AIChatRelatedLink[];
+}
+
+export interface AIChatRelatedLinksPayload {
+  requestId: string;
+  groups: AIChatRelatedLinkGroup[];
+}
+
+export interface AIChatPromptPreview {
+  model: string;
+  retrievalTopK: number;
+  messages: AIChatMessageInput[];
+  relatedLinkGroups: AIChatRelatedLinkGroup[];
+}
+
+export interface AIChatPromptDebugPayload extends AIChatPromptPreview {
+  requestId: string;
+}
+
+export interface AIChatErrorPayload {
+  requestId: string;
+  error: string;
+}
+
+export interface DocsIngestStatus {
+  state: 'idle' | 'running' | 'success' | 'error';
+  message: string;
+  sourceId: string;
+  targetDir: string;
+  manifestPath: string;
+  treeSha: string;
+  totalFiles: number;
+  completedFiles: number;
+  startedAt: string | null;
+  finishedAt: string | null;
+  error: string;
+  hasLocalDocs: boolean;
+}
+
+export interface DocsChunkingStatus {
+  state: 'idle' | 'running' | 'success' | 'error';
+  message: string;
+  sourceId: string;
+  outputPath: string;
+  manifestPath: string;
+  totalFiles: number;
+  completedFiles: number;
+  chunkCount: number;
+  treeSha: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  error: string;
+  hasChunks: boolean;
+}
+
+export interface DocsEmbeddingsStatus {
+  state: 'idle' | 'running' | 'success' | 'error';
+  message: string;
+  sourceId: string;
+  outputPath: string;
+  manifestPath: string;
+  totalChunks: number;
+  completedChunks: number;
+  embeddingCount: number;
+  embeddingModel: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  error: string;
+  hasEmbeddings: boolean;
+}
+
+export interface DocsRetrievalLink {
+  kind: string;
+  label: string;
+  url: string;
+}
+
+export interface DocsRetrievalResult {
+  chunkId: string;
+  path: string;
+  title: string;
+  heading: string;
+  sectionPath: string[];
+  text: string;
+  tokenEstimate: number;
+  githubBlobUrl: string;
+  relatedLinks: DocsRetrievalLink[];
+  score: number;
+}
+
+export interface DocsRetrievalResponse {
+  query: string;
+  topK: number;
+  embeddingModel: string;
+  resultCount: number;
+  results: DocsRetrievalResult[];
+}
+
+export interface AIChatConversation {
+  id: string;
+  title: string;
+  model: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+  lastMessagePreview: string;
+}
+
+export interface AIChatStoredMessage {
+  id: string;
+  conversationId: string;
+  role: 'user' | 'assistant';
+  content: string;
+  relatedLinkGroups: AIChatRelatedLinkGroup[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Helper to create unsubscribe function for event listeners
 function createListener<T>(channel: string, callback: (data: T) => void): () => void {
   const listener = (_event: IpcRendererEvent, data: T) => callback(data);
@@ -118,6 +277,54 @@ export interface ElectronAPI {
     zoomOut: () => void;
     reset: () => void;
     get: () => Promise<number>;
+  };
+  aiChat: {
+    getConfig: () => Promise<AIChatConfig>;
+    setApiKey: (apiKey: string) => Promise<{ encrypted: boolean }>;
+    clearApiKey: () => Promise<{ ok: boolean }>;
+    setModel: (model: string) => Promise<{ ok: boolean; model: string }>;
+    buildPromptPreview: (payload: { model?: string; messages: AIChatMessageInput[] }) => Promise<AIChatPromptPreview>;
+    send: (payload: AIChatSendPayload) => void;
+    cancel: (requestId: string) => void;
+    onPromptDebug: (callback: (payload: AIChatPromptDebugPayload) => void) => () => void;
+    onChunk: (callback: (payload: AIChatChunkPayload) => void) => () => void;
+    onRelatedLinks: (callback: (payload: AIChatRelatedLinksPayload) => void) => () => void;
+    onDone: (callback: (payload: AIChatDonePayload) => void) => () => void;
+    onError: (callback: (payload: AIChatErrorPayload) => void) => () => void;
+    onCancelled: (callback: (payload: AIChatDonePayload) => void) => () => void;
+  };
+  docsIngest: {
+    getStatus: () => Promise<DocsIngestStatus>;
+    downloadHardwareDocs: () => Promise<DocsIngestStatus>;
+    onStatus: (callback: (status: DocsIngestStatus) => void) => () => void;
+  };
+  docsChunking: {
+    getStatus: () => Promise<DocsChunkingStatus>;
+    buildChunks: () => Promise<DocsChunkingStatus>;
+    onStatus: (callback: (status: DocsChunkingStatus) => void) => () => void;
+  };
+  docsEmbeddings: {
+    getStatus: () => Promise<DocsEmbeddingsStatus>;
+    buildEmbeddings: () => Promise<DocsEmbeddingsStatus>;
+    onStatus: (callback: (status: DocsEmbeddingsStatus) => void) => () => void;
+  };
+  docsRetrieval: {
+    retrieveChunks: (input: { query: string; topK?: number }) => Promise<DocsRetrievalResponse>;
+  };
+  aiChatStore: {
+    listConversations: () => Promise<AIChatConversation[]>;
+    createConversation: (input?: { title?: string; model?: string }) => Promise<AIChatConversation>;
+    deleteConversation: (conversationId: string) => Promise<{ deleted: boolean }>;
+    renameConversation: (input: { conversationId: string; title: string }) => Promise<{ renamed: boolean; title: string; updatedAt: string }>;
+    clearConversation: (conversationId: string) => Promise<{ cleared: boolean }>;
+    getMessages: (conversationId: string) => Promise<AIChatStoredMessage[]>;
+    addMessage: (input: {
+      conversationId: string;
+      role: 'user' | 'assistant';
+      content: string;
+      model?: string;
+      relatedLinkGroups?: AIChatRelatedLinkGroup[];
+    }) => Promise<AIChatStoredMessage>;
   };
 }
 
@@ -211,6 +418,76 @@ const electronAPI: ElectronAPI = {
     zoomOut: () => ipcRenderer.send('zoom:out'),
     reset: () => ipcRenderer.send('zoom:reset'),
     get: () => ipcRenderer.invoke('zoom:get'),
+  },
+
+  aiChat: {
+    getConfig: () => ipcRenderer.invoke('ai-chat/get-config'),
+    setApiKey: (apiKey: string) => ipcRenderer.invoke('ai-chat/set-api-key', apiKey),
+    clearApiKey: () => ipcRenderer.invoke('ai-chat/clear-api-key'),
+    setModel: (model: string) => ipcRenderer.invoke('ai-chat/set-model', model),
+    buildPromptPreview: (payload: { model?: string; messages: AIChatMessageInput[] }) =>
+      ipcRenderer.invoke('ai-chat/build-prompt-preview', payload),
+    send: (payload: AIChatSendPayload) => ipcRenderer.send('ai-chat/send', payload),
+    cancel: (requestId: string) => ipcRenderer.send('ai-chat/cancel', requestId),
+    onPromptDebug: (callback: (payload: AIChatPromptDebugPayload) => void) =>
+      createListener('ai-chat/prompt-debug', callback),
+    onChunk: (callback: (payload: AIChatChunkPayload) => void) =>
+      createListener('ai-chat/chunk', callback),
+    onRelatedLinks: (callback: (payload: AIChatRelatedLinksPayload) => void) =>
+      createListener('ai-chat/related-links', callback),
+    onDone: (callback: (payload: AIChatDonePayload) => void) =>
+      createListener('ai-chat/done', callback),
+    onError: (callback: (payload: AIChatErrorPayload) => void) =>
+      createListener('ai-chat/error', callback),
+    onCancelled: (callback: (payload: AIChatDonePayload) => void) =>
+      createListener('ai-chat/cancelled', callback),
+  },
+
+  docsIngest: {
+    getStatus: () => ipcRenderer.invoke('docs-ingest/get-status'),
+    downloadHardwareDocs: () => ipcRenderer.invoke('docs-ingest/download-hardware-docs'),
+    onStatus: (callback: (status: DocsIngestStatus) => void) =>
+      createListener('docs-ingest/status', callback),
+  },
+
+  docsChunking: {
+    getStatus: () => ipcRenderer.invoke('docs-chunking/get-status'),
+    buildChunks: () => ipcRenderer.invoke('docs-chunking/build-chunks'),
+    onStatus: (callback: (status: DocsChunkingStatus) => void) =>
+      createListener('docs-chunking/status', callback),
+  },
+
+  docsEmbeddings: {
+    getStatus: () => ipcRenderer.invoke('docs-embeddings/get-status'),
+    buildEmbeddings: () => ipcRenderer.invoke('docs-embeddings/build-embeddings'),
+    onStatus: (callback: (status: DocsEmbeddingsStatus) => void) =>
+      createListener('docs-embeddings/status', callback),
+  },
+
+  docsRetrieval: {
+    retrieveChunks: (input: { query: string; topK?: number }) =>
+      ipcRenderer.invoke('docs-retrieval/retrieve-chunks', input),
+  },
+
+  aiChatStore: {
+    listConversations: () => ipcRenderer.invoke('ai-chat-store/list-conversations'),
+    createConversation: (input?: { title?: string; model?: string }) =>
+      ipcRenderer.invoke('ai-chat-store/create-conversation', input),
+    deleteConversation: (conversationId: string) =>
+      ipcRenderer.invoke('ai-chat-store/delete-conversation', conversationId),
+    renameConversation: (input: { conversationId: string; title: string }) =>
+      ipcRenderer.invoke('ai-chat-store/rename-conversation', input),
+    clearConversation: (conversationId: string) =>
+      ipcRenderer.invoke('ai-chat-store/clear-conversation', conversationId),
+    getMessages: (conversationId: string) =>
+      ipcRenderer.invoke('ai-chat-store/get-messages', conversationId),
+    addMessage: (input: {
+      conversationId: string;
+      role: 'user' | 'assistant';
+      content: string;
+      model?: string;
+      relatedLinkGroups?: AIChatRelatedLinkGroup[];
+    }) => ipcRenderer.invoke('ai-chat-store/add-message', input),
   },
 };
 
